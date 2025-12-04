@@ -1,4 +1,46 @@
-# openpi
+# OpenPI Custom Training
+
+Fine-tuning Pi0.5 with LoRA on custom datasets.
+
+## Quick Start
+
+```bash
+# Full pipeline (convert + train)
+python scripts/custom_training/pipeline.py \
+  --data_dir /path/to/h5_files \
+  --output_dir datasets/my_dataset \
+  --exp_name my_experiment
+
+# Or run steps individually:
+python scripts/custom_training/convert_data.py --data_dir /path/to/h5 --output_dir datasets/my_dataset
+python scripts/custom_training/compute_stats.py --dataset_dir datasets/my_dataset
+python scripts/custom_training/run_training.py --config pi05_custom --exp_name my_experiment
+```
+
+## Requirements
+
+- H5 files with: `observations/images` (HxWx3), `observations/states` (N,), `actions` (M,)
+- Actions are padded from M → 32 dimensions automatically
+- Single-episode tasks used as test set (with `--split_mode auto`)
+
+## Training Config
+
+Edit `src/openpi/training/config.py` to modify:
+- `batch_size`, `num_train_steps`, learning rate
+- Model dimensions (default: 32-dim actions with padding)
+- Dataset path: `repo_id` in `LeRobotCustomDataConfig`
+
+## Monitoring
+
+View training at: https://wandb.ai
+
+Checkpoints saved to: `checkpoints/<config_name>/<exp_name>/`
+
+---
+
+## Original OpenPI
+
+Based on [Physical-Intelligence/openpi](https://github.com/Physical-Intelligence/openpi)
 
 openpi holds open-source models and packages for robotics, published by the [Physical Intelligence team](https://www.physicalintelligence.company/).
 
