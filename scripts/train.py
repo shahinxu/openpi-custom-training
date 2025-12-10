@@ -27,6 +27,17 @@ import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
 import openpi.training.weight_loaders as _weight_loaders
 
+# Import evaluation utilities
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent / "custom_training"))
+try:
+    from evaluate import evaluate_test_set
+    EVAL_AVAILABLE = True
+except ImportError:
+    EVAL_AVAILABLE = False
+    logging.warning("Evaluation module not available")
+
 # Import custom configs
 try:
     import openpi.training.custom_config  # noqa: F401
@@ -277,6 +288,27 @@ def main(config: _config.TrainConfig):
 
         if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
             _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
+            
+            # Run evaluation on test set after saving checkpoint
+            if EVAL_AVAILABLE and step > 0:
+                try:
+                    eval_dir = checkpoint_manager.directory / "eval_results"
+                    eval_summary = evaluate_test_set(
+                        state=train_state,
+                        data_loader=data_loader,
+                        model_apply_fn=lambda params, inputs: model.call(inputs, train=False, params=params),
+                        step=step,
+                        output_dir=eval_dir,
+                    )
+                    # Log evaluation metrics to wandb
+                    if eval_summary and "overall_metrics" in eval_summary:
+                        eval_metrics = {f"eval/{k}": v for k, v in eval_summary["overall_metrics"].items()}
+                        wandb.log(eval_metrics, step=step)
+                        logging.info(f"Logged evaluation metrics to wandb")
+                except Exception as e:
+                    logging.error(f"Evaluation failed at step {step}: {e}")
+                    import traceback
+                    traceback.print_exc()
 
     logging.info("Waiting for checkpoint manager to finish")
     checkpoint_manager.wait_until_finished()
