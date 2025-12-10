@@ -6,7 +6,7 @@ from typing import Protocol, TypeAlias, TypeVar, runtime_checkable
 import flax.traverse_util as traverse_util
 import jax
 import numpy as np
-from openpi_client import image_tools
+from PIL import Image
 
 from openpi.models import tokenizer as _tokenizer
 from openpi.shared import array_typing as at
@@ -181,13 +181,24 @@ class Unnormalize(DataTransformFn):
         return (x + 1.0) / 2.0 * (q99 - q01 + 1e-6) + q01
 
 
+def _resize_with_pad(image: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Resize image with padding to maintain aspect ratio."""
+    if image.shape[:2] == (height, width):
+        return image
+    pil_img = Image.fromarray(image)
+    pil_img.thumbnail((width, height), Image.LANCZOS)
+    new_img = Image.new("RGB", (width, height), (0, 0, 0))
+    new_img.paste(pil_img, ((width - pil_img.width) // 2, (height - pil_img.height) // 2))
+    return np.array(new_img)
+
+
 @dataclasses.dataclass(frozen=True)
 class ResizeImages(DataTransformFn):
     height: int
     width: int
 
     def __call__(self, data: DataDict) -> DataDict:
-        data["image"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["image"].items()}
+        data["image"] = {k: _resize_with_pad(v, self.height, self.width) for k, v in data["image"].items()}
         return data
 
 
