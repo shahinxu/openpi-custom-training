@@ -1014,11 +1014,11 @@ _CONFIGS = [
             repo_id="rzh/openpi_segmented_data",
         ),
         batch_size=32,
-        num_train_steps=10_000,
+        num_train_steps=1_000,
         lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=500,
+            warmup_steps=100,
             peak_lr=3e-4,
-            decay_steps=10_000,
+            decay_steps=1_000,
             decay_lr=1e-5,
         ),
         optimizer=_optimizer.AdamW(clip_gradient_norm=1.0, weight_decay=0.01),
@@ -1031,9 +1031,9 @@ _CONFIGS = [
             action_horizon=10,
         ).get_freeze_filter(),
         ema_decay=None,
-        log_interval=50,
-        save_interval=1000,
-        keep_period=5000,
+        log_interval=20,
+        save_interval=200,
+        keep_period=1000,
     ),
     #
     # RoboArena configs.
