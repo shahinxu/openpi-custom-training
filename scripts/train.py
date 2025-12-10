@@ -76,6 +76,97 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
         wandb.run.log_code(epath.Path(__file__).parent.parent)
 
 
+def evaluate_on_test_set(
+    train_state: training_utils.TrainState,
+    data_loader: _data_loader.DataLoader,
+    train_step_fn,
+    step: int,
+    checkpoint_dir: epath.Path,
+    max_eval_batches: int = 20,
+) -> dict[str, float]:
+    """Evaluate model on test set and return metrics."""
+    import json
+    
+    logging.info(f"Starting test set evaluation at step {step}...")
+    
+    try:
+        # Create evaluation directory
+        eval_dir = checkpoint_dir / "eval_results"
+        eval_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Get a fresh test iterator
+        test_loader = data_loader.iterator(split="test", shuffle=False, repeat=False)
+        
+        # Collect predictions and targets
+        all_predictions = []
+        all_targets = []
+        test_losses = []
+        
+        batch_count = 0
+        for batch in test_loader:
+            if batch_count >= max_eval_batches:
+                break
+                
+            try:
+                inputs, targets = batch
+                
+                # Run model in eval mode (no gradient computation)
+                _, info = train_step_fn(None, train_state, batch)
+                test_loss = float(jax.device_get(info.get("loss", 0.0)))
+                test_losses.append(test_loss)
+                
+                batch_count += 1
+                
+            except StopIteration:
+                break
+            except Exception as e:
+                logging.warning(f"Error in eval batch {batch_count}: {e}")
+                break
+        
+        if not test_losses:
+            logging.warning("No test batches evaluated")
+            return {}
+        
+        # Compute metrics
+        metrics = {
+            "test_loss": float(np.mean(test_losses)),
+            "test_loss_std": float(np.std(test_losses)),
+            "test_loss_min": float(np.min(test_losses)),
+            "test_loss_max": float(np.max(test_losses)),
+            "num_test_batches": len(test_losses),
+        }
+        
+        # Save evaluation results
+        eval_summary = {
+            "step": step,
+            "metrics": metrics,
+            "per_batch_losses": test_losses,
+        }
+        
+        eval_file = eval_dir / f"eval_step_{step:06d}.json"
+        with open(eval_file, "w") as f:
+            json.dump(eval_summary, f, indent=2)
+        
+        # Log to console
+        logging.info(f"\n{'='*70}")
+        logging.info(f"Test Set Evaluation - Step {step}")
+        logging.info(f"{'='*70}")
+        logging.info(f"  Batches evaluated: {metrics['num_test_batches']}")
+        logging.info(f"  Test loss (avg): {metrics['test_loss']:.4f}")
+        logging.info(f"  Test loss (std): {metrics['test_loss_std']:.4f}")
+        logging.info(f"  Test loss (min): {metrics['test_loss_min']:.4f}")
+        logging.info(f"  Test loss (max): {metrics['test_loss_max']:.4f}")
+        logging.info(f"{'='*70}\n")
+        
+        return metrics
+        
+    except Exception as e:
+        logging.error(f"Evaluation failed at step {step}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}
+
+
 def _load_weights_and_validate(loader: _weight_loaders.WeightLoader, params_shape: at.Params) -> at.Params:
     """Loads and validates the weights. Returns a loaded subset of the weights."""
     loaded_params = loader.load(params_shape)
@@ -278,9 +369,27 @@ def main(config: _config.TrainConfig):
         if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
             _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
             
-            # TODO: Add test set evaluation here
-            # Currently disabled due to data loader compatibility issues
-            # Use scripts/custom_training/evaluate.py for manual evaluation
+            # Run evaluation on test set
+            if step > 0:
+                try:
+                    eval_metrics = evaluate_on_test_set(
+                        train_state=train_state,
+                        data_loader=data_loader,
+                        train_step_fn=functools.partial(train_step, config),
+                        step=step,
+                        checkpoint_dir=checkpoint_manager.directory,
+                        max_eval_batches=20,
+                    )
+                    
+                    # Log to wandb with eval/ prefix
+                    if eval_metrics:
+                        wandb_eval_metrics = {f"eval/{k}": v for k, v in eval_metrics.items()}
+                        wandb.log(wandb_eval_metrics, step=step)
+                        
+                except Exception as e:
+                    logging.error(f"Evaluation failed: {e}")
+                    import traceback
+                    traceback.print_exc()
 
     logging.info("Waiting for checkpoint manager to finish")
     checkpoint_manager.wait_until_finished()
