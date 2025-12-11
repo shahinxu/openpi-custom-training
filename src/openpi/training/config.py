@@ -89,6 +89,9 @@ class DataConfig:
     # If true, will use the LeRobot dataset task to define the prompt.
     prompt_from_task: bool = False
 
+    # Local directory path for the dataset (if not using HuggingFace Hub).
+    local_dir: str | None = None
+
     # Only used for RLDS data loader (ie currently only used for DROID).
     rlds_data_dir: str | None = None
     # Action space for DROID dataset.
@@ -166,6 +169,8 @@ class ModelTransformFactory(GroupFactory):
 class DataConfigFactory(abc.ABC):
     # The LeRobot repo id.
     repo_id: str = tyro.MISSING
+    # Local directory path for the dataset (if not using HuggingFace Hub).
+    local_dir: str | None = None
     # Determines how the assets will be loaded.
     assets: AssetsConfig = dataclasses.field(default_factory=AssetsConfig)
     # Base config that will be updated by the factory.
@@ -182,6 +187,7 @@ class DataConfigFactory(abc.ABC):
             self.base_config or DataConfig(),
             repo_id=repo_id,
             asset_id=asset_id,
+            local_dir=self.local_dir,
             norm_stats=self._load_norm_stats(epath.Path(self.assets.assets_dir or assets_dirs), asset_id),
             use_quantile_norm=model_config.model_type != ModelType.PI0,
         )
@@ -1014,11 +1020,11 @@ _CONFIGS = [
             repo_id="rzh/openpi_segmented_data",
         ),
         batch_size=32,
-        num_train_steps=2,  # Just enough to trigger one evaluation at step 20
+        num_train_steps=1000,
         lr_schedule=_optimizer.CosineDecaySchedule(
-            warmup_steps=5,
+            warmup_steps=100,
             peak_lr=3e-4,
-            decay_steps=21,
+            decay_steps=1000,
             decay_lr=1e-5,
         ),
         optimizer=_optimizer.AdamW(clip_gradient_norm=1.0, weight_decay=0.01),
@@ -1031,9 +1037,45 @@ _CONFIGS = [
             action_horizon=10,
         ).get_freeze_filter(),
         ema_decay=None,
-        log_interval=5,
-        save_interval=1,
-        keep_period=100,
+        log_interval=20,
+        save_interval=200,
+        keep_period=200,
+    ),
+    TrainConfig(
+        name="pi05_train_test",
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            action_dim=32,
+            action_horizon=10,
+            discrete_state_input=False,
+        ),
+        data=LeRobotCustomDataConfig(
+            repo_id="rzh/train_test_dataset",
+            local_dir="/home/rzh/zhenx/openpi/data/train_test_dataset",
+        ),
+        batch_size=32,
+        num_train_steps=1000,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=100,
+            peak_lr=3e-4,
+            decay_steps=1000,
+            decay_lr=1e-5,
+        ),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0, weight_decay=0.01),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+            action_dim=32,
+            action_horizon=10,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        log_interval=20,
+        save_interval=200,
+        keep_period=200,
     ),
     *roboarena_config.get_roboarena_configs(),
 ]
