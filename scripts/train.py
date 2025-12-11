@@ -72,127 +72,213 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
 def evaluate_on_test_set(
     train_state: training_utils.TrainState,
     config: _config.TrainConfig,
-    train_step_fn,
     step: int,
     checkpoint_dir: epath.Path,
     mesh: jax.sharding.Mesh,
-    data_iter,  # Use the training data iterator
-    rng: at.KeyArrayLike,  # Need random key for train_step
-    max_eval_batches: int = 20,
+    rng: at.KeyArrayLike,
+    data_loader: _data_loader.DataLoader,
 ) -> dict[str, float]:
-    """Evaluate model on test set and return metrics including action prediction errors."""
+    """Evaluate model on test set. Compute MSE for overall test set and per-episode."""
     import json
+    import csv
+    from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
     
-    logging.info(f"Starting evaluation at step {step} (evaluating next {max_eval_batches} batches)...")
+    logging.info(f"Starting test set evaluation at step {step}...")
     
     try:
         # Create evaluation directory
         eval_dir = checkpoint_dir / "eval_results"
         eval_dir.mkdir(parents=True, exist_ok=True)
         
-        # Collect action predictions
-        action_errors = []  # Store per-sample action errors
-        all_predictions = []  # Store all predictions for detailed analysis
-        all_ground_truth = []  # Store all ground truth actions
+        # Get metadata to determine test episodes
+        info_path = epath.Path(config.data.local_dir) / "meta" / "info.json"
+        with open(info_path) as f:
+            info = json.load(f)
         
-        # Reconstruct model from train_state
+        # Parse train split
+        train_split = info["splits"]["train"]
+        train_start, train_end = map(int, train_split.split(":"))
+        total_episodes = info["total_episodes"]
+        test_episode_indices = list(range(train_end, total_episodes))
+        
+        logging.info(f"Test episodes: {train_end}-{total_episodes-1} ({len(test_episode_indices)} episodes)")
+        
+        # Reconstruct model
         model = nnx.merge(train_state.model_def, train_state.params)
         
-        for batch_count in range(max_eval_batches):
-            try:
-                # Get next batch from training iterator
-                batch = next(data_iter)
-                observation, actions_gt = batch
+        # Load dataset
+        dataset = LeRobotDataset(
+            repo_id=config.data.repo_id,
+            root=config.data.local_dir,
+        )
+        
+        # Group frames by episode
+        logging.info("Grouping test data by episode...")
+        episode_frames = {}
+        for idx in range(len(dataset)):
+            sample = dataset[idx]
+            ep_idx = int(sample['episode_index'].item() if hasattr(sample['episode_index'], 'item') else sample['episode_index'])
+            if ep_idx not in test_episode_indices:
+                continue
+            if ep_idx not in episode_frames:
+                episode_frames[ep_idx] = []
+            episode_frames[ep_idx].append(idx)
+        
+        logging.info(f"Found {len(episode_frames)} test episodes")
+        
+        # Collect MSE per episode (not storing predictions to save memory)
+        episode_data = {}
+        for ep_idx in sorted(episode_frames.keys()):
+            episode_data[ep_idx] = {
+                'episode_index': ep_idx,
+                'mses': [],
+                'num_frames': len(episode_frames[ep_idx]),
+            }
+        
+        # Apply same transforms as training data
+        logging.info("Creating transformed dataset for evaluation...")
+        from openpi.training.data_loader import transform_dataset, create_torch_dataset
+        
+        # Create torch dataset with same config
+        torch_dataset = create_torch_dataset(
+            config.data.create(config.assets_dirs, config.model),
+            action_horizon=config.model.action_horizon,
+            model_config=config.model
+        )
+        
+        # Apply transforms
+        transformed_dataset = transform_dataset(
+            torch_dataset,
+            config.data.create(config.assets_dirs, config.model),
+            skip_norm_stats=False
+        )
+        
+        # Process each test episode with model inference
+        logging.info("Running model inference on test episodes...")
+        import torch
+        for ep_idx in sorted(episode_frames.keys()):
+            logging.info(f"  Evaluating episode {ep_idx} ({episode_data[ep_idx]['num_frames']} frames)...")
+            frame_indices = episode_frames[ep_idx]
+            
+            # Process in batches for efficiency (reduced batch size to save memory)
+            batch_size = 8
+            for i in range(0, len(frame_indices), batch_size):
+                batch_frame_indices = frame_indices[i:i+batch_size]
                 
-                # Sample actions from the model for action prediction metrics
+                # Get transformed samples
+                batch_samples = [transformed_dataset[idx] for idx in batch_frame_indices]
+                
+                # Stack into batch
+                # Sample format after transform: dict with observation keys + 'actions' key
+                batch_obs_dict = {}
+                batch_actions_gt = []
+                
+                for sample in batch_samples:
+                    # Extract action
+                    batch_actions_gt.append(sample['actions'])
+                    
+                    # Extract observations (all keys except 'actions')
+                    for key, value in sample.items():
+                        if key != 'actions':
+                            if key not in batch_obs_dict:
+                                batch_obs_dict[key] = []
+                            batch_obs_dict[key].append(value)
+                
+                # Stack tensors - handle nested dicts (e.g., 'image' contains multiple camera views)
+                def stack_nested(values):
+                    """Recursively stack values that might be nested dicts or tensors."""
+                    if not values:
+                        return None
+                    first = values[0]
+                    if isinstance(first, dict):
+                        # Recursively stack nested dict
+                        return {k: stack_nested([v[k] for v in values]) for k in first.keys()}
+                    elif isinstance(first, torch.Tensor):
+                        return torch.stack(values)
+                    else:
+                        # Convert to tensor, handling numpy types properly
+                        tensor_values = []
+                        for x in values:
+                            if isinstance(x, torch.Tensor):
+                                tensor_values.append(x)
+                            elif isinstance(x, (np.ndarray, np.generic)):
+                                # np.generic covers all numpy scalar types (np.bool_, np.int64, etc.)
+                                tensor_values.append(torch.from_numpy(np.asarray(x)))
+                            else:
+                                tensor_values.append(torch.tensor(x))
+                        return torch.stack(tensor_values)
+                
+                for key in batch_obs_dict:
+                    batch_obs_dict[key] = stack_nested(batch_obs_dict[key])
+                
+                # Convert actions to tensors if needed
+                batch_actions_gt = torch.stack([
+                    torch.tensor(x) if not isinstance(x, torch.Tensor) else x 
+                    for x in batch_actions_gt
+                ])
+                
+                # Convert to JAX/numpy format
+                batch_obs_jax = jax.tree.map(
+                    lambda x: jnp.array(x.numpy()) if isinstance(x, torch.Tensor) else jnp.array(x),
+                    batch_obs_dict
+                )
+                
+                # Create Observation object from dict
+                from openpi.models import model as model_lib
+                batch_obs_model = model_lib.Observation.from_dict(batch_obs_jax)
+                
+                # Run model prediction
                 with sharding.set_mesh(mesh):
-                    pred_rng = jax.random.fold_in(rng, batch_count)
-                    actions_pred = model.sample_actions(pred_rng, observation)
+                    pred_rng = jax.random.fold_in(rng, ep_idx * 100000 + i)
+                    actions_pred = model.sample_actions(pred_rng, batch_obs_model)
                 
-                # Convert to numpy for metrics computation
-                actions_pred_np = jax.device_get(actions_pred)
-                actions_gt_np = jax.device_get(actions_gt)
+                # Convert to numpy
+                actions_pred_np = np.array(jax.device_get(actions_pred))
+                actions_gt_np = batch_actions_gt.numpy()
                 
-                # Compute per-sample errors
-                batch_size = actions_pred_np.shape[0]
-                for i in range(batch_size):
-                    pred = actions_pred_np[i]  # Shape: (horizon, action_dim)
-                    gt = actions_gt_np[i]      # Shape: (horizon, action_dim)
+                # Compute MSE for each frame in batch (don't store predictions to save memory)
+                for j in range(len(batch_samples)):
+                    pred = actions_pred_np[j]
+                    gt = actions_gt_np[j]
                     
-                    # Compute MSE and MAE for this sample
-                    sample_mse = np.mean((pred - gt) ** 2)
-                    sample_mae = np.mean(np.abs(pred - gt))
-                    
-                    # Compute per-dimension errors (averaged over horizon)
-                    per_dim_mse = np.mean((pred - gt) ** 2, axis=0)
-                    per_dim_mae = np.mean(np.abs(pred - gt), axis=0)
-                    
-                    action_errors.append({
-                        "batch": batch_count,
-                        "sample_idx": i,
-                        "mse": float(sample_mse),
-                        "mae": float(sample_mae),
-                        "per_dim_mse": per_dim_mse.tolist(),
-                        "per_dim_mae": per_dim_mae.tolist(),
-                    })
-                    
-                    # Store predictions and ground truth for detailed comparison
-                    all_predictions.append(pred.tolist())
-                    all_ground_truth.append(gt.tolist())
+                    # Only store MSE, not full predictions (saves memory)
+                    mse = float(np.mean((pred - gt) ** 2))
+                    episode_data[ep_idx]['mses'].append(mse)
                 
-                if (batch_count + 1) % 5 == 0:
-                    logging.info(f"  Evaluated {batch_count + 1}/{max_eval_batches} batches")
-                
-            except StopIteration:
-                logging.info(f"Data iterator exhausted after {batch_count} batches")
-                break
-            except Exception as e:
-                logging.warning(f"Error in eval batch {batch_count}: {e}")
-                import traceback
-                traceback.print_exc()
-                break
+                # Clear JAX cache to free memory
+                jax.clear_caches()
         
-        if not action_errors:
-            logging.warning("No test batches evaluated")
-            return {}
+        # Compute per-episode MSE
+        for ep_idx, ep_data in episode_data.items():
+            if ep_data['mses']:
+                ep_data['mse'] = float(np.mean(ep_data['mses']))
+                ep_data['num_frames'] = len(ep_data['mses'])
+            else:
+                ep_data['mse'] = 0.0
+                ep_data['num_frames'] = 0
         
-        # Compute overall metrics
-        all_mses = [e["mse"] for e in action_errors]
-        all_maes = [e["mae"] for e in action_errors]
+        # Compute overall MSE
+        all_mses = []
+        for ep_data in episode_data.values():
+            all_mses.extend(ep_data['mses'])
+        overall_mse = float(np.mean(all_mses)) if all_mses else 0.0
         
-        metrics = {
-            "num_test_batches": len(action_errors) // 32,  # Approximate number of batches
-            "num_samples": len(action_errors),
-            # Action prediction metrics
-            "action_mse": float(np.mean(all_mses)),
-            "action_mse_std": float(np.std(all_mses)),
-            "action_mae": float(np.mean(all_maes)),
-            "action_mae_std": float(np.std(all_maes)),
-        }
+        logging.info(f"Evaluation complete: Overall MSE = {overall_mse:.6f}")
         
-        # Compute per-dimension statistics
-        num_dims = len(action_errors[0]["per_dim_mse"])
-        per_dim_stats = {}
-        for dim_idx in range(num_dims):
-            dim_mses = [e["per_dim_mse"][dim_idx] for e in action_errors]
-            dim_maes = [e["per_dim_mae"][dim_idx] for e in action_errors]
-            per_dim_stats[f"dim_{dim_idx}_mse"] = float(np.mean(dim_mses))
-            per_dim_stats[f"dim_{dim_idx}_mae"] = float(np.mean(dim_maes))
-        
-        metrics.update(per_dim_stats)
-        
-        # Save detailed evaluation results
+        # Save results (without predictions to save disk space)
         eval_summary = {
             "step": step,
-            "metrics": metrics,
-            "per_sample_errors": action_errors,  # Detailed per-sample errors
-            "sample_predictions_vs_groundtruth": [
+            "overall_mse": overall_mse,
+            "num_episodes": len(episode_data),
+            "num_frames": len(all_mses),
+            "per_episode_results": [
                 {
-                    "sample_idx": i,
-                    "predicted": all_predictions[i],
-                    "ground_truth": all_ground_truth[i],
+                    'episode_index': ep_idx,
+                    'num_frames': ep_data['num_frames'],
+                    'mse': ep_data['mse'],
+
                 }
-                for i in range(min(20, len(all_predictions)))  # Save first 20 samples for inspection
+                for ep_idx, ep_data in sorted(episode_data.items())
             ]
         }
         
@@ -200,62 +286,50 @@ def evaluate_on_test_set(
         with open(eval_file, "w") as f:
             json.dump(eval_summary, f, indent=2)
         
-        # Save per-sample errors as CSV table for easy analysis
-        import csv
-        csv_file = eval_dir / f"eval_step_{step:06d}_per_sample.csv"
+        # Save per-episode CSV
+        csv_file = eval_dir / f"eval_step_{step:06d}_per_episode.csv"
         with open(csv_file, "w", newline="") as f:
-            if action_errors:
-                # Create header with all dimension columns
-                num_dims = len(action_errors[0]["per_dim_mse"])
-                fieldnames = ["sample_idx", "batch", "mse", "mae"]
-                for dim_idx in range(num_dims):
-                    fieldnames.extend([f"dim_{dim_idx}_mse", f"dim_{dim_idx}_mae"])
-                
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                
-                for err in action_errors:
-                    row = {
-                        "sample_idx": err["sample_idx"],
-                        "batch": err["batch"],
-                        "mse": f"{err['mse']:.6f}",
-                        "mae": f"{err['mae']:.6f}",
-                    }
-                    for dim_idx in range(num_dims):
-                        row[f"dim_{dim_idx}_mse"] = f"{err['per_dim_mse'][dim_idx]:.6f}"
-                        row[f"dim_{dim_idx}_mae"] = f"{err['per_dim_mae'][dim_idx]:.6f}"
-                    writer.writerow(row)
+            writer = csv.DictWriter(f, fieldnames=["episode_index", "num_frames", "mse"])
+            writer.writeheader()
+            for ep_idx, ep_data in sorted(episode_data.items()):
+                writer.writerow({
+                    "episode_index": ep_idx,
+                    "num_frames": ep_data['num_frames'],
+                    "mse": f"{ep_data['mse']:.6f}",
+                })
         
-        # Append summary metrics to a cumulative CSV file across all evaluations
+        # Append to summary CSV
         summary_csv = eval_dir / "evaluation_summary.csv"
         file_exists = summary_csv.exists()
         with open(summary_csv, "a", newline="") as f:
-            fieldnames = ["step"] + list(metrics.keys())
+            fieldnames = ["step", "overall_mse", "num_episodes", "num_frames"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
-            
             if not file_exists:
                 writer.writeheader()
-            
-            row = {"step": step}
-            row.update({k: f"{v:.6f}" if isinstance(v, float) else v for k, v in metrics.items()})
-            writer.writerow(row)
+            writer.writerow({
+                "step": step,
+                "overall_mse": f"{overall_mse:.6f}",
+                "num_episodes": len(episode_data),
+                "num_frames": len(all_mses),
+            })
         
-        # Log to console
+        # Log results
         logging.info(f"\n{'='*70}")
         logging.info(f"Test Set Evaluation - Step {step}")
         logging.info(f"{'='*70}")
-        logging.info(f"  Samples evaluated: {metrics['num_samples']}")
-        logging.info(f"")
-        logging.info(f"  Action Prediction Metrics:")
-        logging.info(f"    MSE: {metrics['action_mse']:.6f} ± {metrics['action_mse_std']:.6f}")
-        logging.info(f"    MAE: {metrics['action_mae']:.6f} ± {metrics['action_mae_std']:.6f}")
-        logging.info(f"")
-        logging.info(f"  Per-Dimension MSE:")
-        for dim_idx in range(num_dims):
-            logging.info(f"    Dim {dim_idx}: {metrics[f'dim_{dim_idx}_mse']:.6f} (MAE: {metrics[f'dim_{dim_idx}_mae']:.6f})")
+        logging.info(f"  Test episodes: {len(episode_data)}")
+        logging.info(f"  Total frames: {len(all_mses)}")
+        logging.info(f"  Overall MSE: {overall_mse:.6f}")
+        logging.info(f"\n  Per-Episode MSE:")
+        for ep_idx, ep_data in sorted(episode_data.items()):
+            logging.info(f"    Episode {ep_idx:2d}: {ep_data['mse']:.6f} ({ep_data['num_frames']} frames)")
         logging.info(f"{'='*70}\n")
         
-        return metrics
+        return {
+            "test/mse": overall_mse,
+            "test/num_episodes": len(episode_data),
+            "test/num_frames": len(all_mses),
+        }
         
     except Exception as e:
         logging.error(f"Evaluation failed at step {step}: {e}")
@@ -472,13 +546,11 @@ def main(config: _config.TrainConfig):
                     eval_metrics = evaluate_on_test_set(
                         train_state=train_state,
                         config=config,
-                        train_step_fn=functools.partial(train_step, config),
                         step=step,
                         checkpoint_dir=checkpoint_manager.directory,
                         mesh=mesh,
-                        data_iter=data_iter,
-                        rng=train_rng,  # Pass the training random key
-                        max_eval_batches=20,
+                        rng=train_rng,
+                        data_loader=data_loader,
                     )
                     
                     # Log to wandb with eval/ prefix
