@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Complete pipeline: convert H5 data → compute stats → train."""
+"""Complete pipeline: convert H5 data → compute stats → train with separate train/test sets."""
 
 import argparse
 import subprocess
@@ -21,8 +21,9 @@ def run_command(cmd, desc):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Full training pipeline")
-    parser.add_argument("--data_dir", required=True, help="Source H5 directory")
+    parser = argparse.ArgumentParser(description="Full training pipeline with separate train/test")
+    parser.add_argument("--train_dir", required=True, help="Training data directory")
+    parser.add_argument("--test_dir", required=True, help="Test data directory (H5 files)")
     parser.add_argument("--output_dir", default="datasets/my_dataset", help="Dataset output")
     parser.add_argument("--exp_name", required=True, help="Experiment name")
     parser.add_argument("--config", default="pi05_custom", help="Training config")
@@ -32,27 +33,29 @@ def main():
     args = parser.parse_args()
     
     script_dir = Path(__file__).parent
+    python_bin = sys.executable  # Use current Python interpreter
     
-    # Step 1: Convert data
+    # Step 1: Convert training data (all episodes as train)
     if not args.skip_convert:
         run_command(
-            ["python", str(script_dir / "convert_data.py"),
-             "--data_dir", args.data_dir,
+            [python_bin, str(script_dir / "convert_data_split.py"),
+             "--train_dir", args.train_dir,
+             "--test_dir", args.test_dir,
              "--output_dir", args.output_dir],
-            "Data conversion"
+            "Data conversion (separate train/test)"
         )
     
     # Step 2: Compute stats
     if not args.skip_stats:
         run_command(
-            ["python", str(script_dir / "compute_stats.py"),
+            [python_bin, str(script_dir / "compute_stats.py"),
              "--dataset_dir", args.output_dir],
             "Compute normalization stats"
         )
     
     # Step 3: Train
     run_command(
-        ["python", str(script_dir / "run_training.py"),
+        [python_bin, str(script_dir / "run_training.py"),
          "--config", args.config,
          "--exp_name", args.exp_name,
          "--gpu", str(args.gpu)],

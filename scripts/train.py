@@ -9,7 +9,6 @@ import flax.nnx as nnx
 from flax.training import common_utils
 import flax.traverse_util as traverse_util
 import jax
-import jax.experimental
 import jax.numpy as jnp
 import numpy as np
 import optax
@@ -26,12 +25,6 @@ import openpi.training.optimizer as _optimizer
 import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
 import openpi.training.weight_loaders as _weight_loaders
-
-# Import custom configs
-try:
-    import openpi.training.custom_config  # noqa: F401
-except ImportError:
-    pass  # Custom config is optional
 
 
 def init_logging():
@@ -78,84 +71,188 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
 
 def evaluate_on_test_set(
     train_state: training_utils.TrainState,
-    data_loader: _data_loader.DataLoader,
+    config: _config.TrainConfig,
     train_step_fn,
     step: int,
     checkpoint_dir: epath.Path,
+    mesh: jax.sharding.Mesh,
+    data_iter,  # Use the training data iterator
+    rng: at.KeyArrayLike,  # Need random key for train_step
     max_eval_batches: int = 20,
 ) -> dict[str, float]:
-    """Evaluate model on test set and return metrics."""
+    """Evaluate model on test set and return metrics including action prediction errors."""
     import json
     
-    logging.info(f"Starting test set evaluation at step {step}...")
+    logging.info(f"Starting evaluation at step {step} (evaluating next {max_eval_batches} batches)...")
     
     try:
         # Create evaluation directory
         eval_dir = checkpoint_dir / "eval_results"
         eval_dir.mkdir(parents=True, exist_ok=True)
         
-        # Get a fresh test iterator
-        test_loader = data_loader.iterator(split="test", shuffle=False, repeat=False)
+        # Collect action predictions
+        action_errors = []  # Store per-sample action errors
+        all_predictions = []  # Store all predictions for detailed analysis
+        all_ground_truth = []  # Store all ground truth actions
         
-        # Collect predictions and targets
-        all_predictions = []
-        all_targets = []
-        test_losses = []
+        # Reconstruct model from train_state
+        model = nnx.merge(train_state.model_def, train_state.params)
         
-        batch_count = 0
-        for batch in test_loader:
-            if batch_count >= max_eval_batches:
-                break
-                
+        for batch_count in range(max_eval_batches):
             try:
-                inputs, targets = batch
+                # Get next batch from training iterator
+                batch = next(data_iter)
+                observation, actions_gt = batch
                 
-                # Run model in eval mode (no gradient computation)
-                _, info = train_step_fn(None, train_state, batch)
-                test_loss = float(jax.device_get(info.get("loss", 0.0)))
-                test_losses.append(test_loss)
+                # Sample actions from the model for action prediction metrics
+                with sharding.set_mesh(mesh):
+                    pred_rng = jax.random.fold_in(rng, batch_count)
+                    actions_pred = model.sample_actions(pred_rng, observation)
                 
-                batch_count += 1
+                # Convert to numpy for metrics computation
+                actions_pred_np = jax.device_get(actions_pred)
+                actions_gt_np = jax.device_get(actions_gt)
+                
+                # Compute per-sample errors
+                batch_size = actions_pred_np.shape[0]
+                for i in range(batch_size):
+                    pred = actions_pred_np[i]  # Shape: (horizon, action_dim)
+                    gt = actions_gt_np[i]      # Shape: (horizon, action_dim)
+                    
+                    # Compute MSE and MAE for this sample
+                    sample_mse = np.mean((pred - gt) ** 2)
+                    sample_mae = np.mean(np.abs(pred - gt))
+                    
+                    # Compute per-dimension errors (averaged over horizon)
+                    per_dim_mse = np.mean((pred - gt) ** 2, axis=0)
+                    per_dim_mae = np.mean(np.abs(pred - gt), axis=0)
+                    
+                    action_errors.append({
+                        "batch": batch_count,
+                        "sample_idx": i,
+                        "mse": float(sample_mse),
+                        "mae": float(sample_mae),
+                        "per_dim_mse": per_dim_mse.tolist(),
+                        "per_dim_mae": per_dim_mae.tolist(),
+                    })
+                    
+                    # Store predictions and ground truth for detailed comparison
+                    all_predictions.append(pred.tolist())
+                    all_ground_truth.append(gt.tolist())
+                
+                if (batch_count + 1) % 5 == 0:
+                    logging.info(f"  Evaluated {batch_count + 1}/{max_eval_batches} batches")
                 
             except StopIteration:
+                logging.info(f"Data iterator exhausted after {batch_count} batches")
                 break
             except Exception as e:
                 logging.warning(f"Error in eval batch {batch_count}: {e}")
+                import traceback
+                traceback.print_exc()
                 break
         
-        if not test_losses:
+        if not action_errors:
             logging.warning("No test batches evaluated")
             return {}
         
-        # Compute metrics
+        # Compute overall metrics
+        all_mses = [e["mse"] for e in action_errors]
+        all_maes = [e["mae"] for e in action_errors]
+        
         metrics = {
-            "test_loss": float(np.mean(test_losses)),
-            "test_loss_std": float(np.std(test_losses)),
-            "test_loss_min": float(np.min(test_losses)),
-            "test_loss_max": float(np.max(test_losses)),
-            "num_test_batches": len(test_losses),
+            "num_test_batches": len(action_errors) // 32,  # Approximate number of batches
+            "num_samples": len(action_errors),
+            # Action prediction metrics
+            "action_mse": float(np.mean(all_mses)),
+            "action_mse_std": float(np.std(all_mses)),
+            "action_mae": float(np.mean(all_maes)),
+            "action_mae_std": float(np.std(all_maes)),
         }
         
-        # Save evaluation results
+        # Compute per-dimension statistics
+        num_dims = len(action_errors[0]["per_dim_mse"])
+        per_dim_stats = {}
+        for dim_idx in range(num_dims):
+            dim_mses = [e["per_dim_mse"][dim_idx] for e in action_errors]
+            dim_maes = [e["per_dim_mae"][dim_idx] for e in action_errors]
+            per_dim_stats[f"dim_{dim_idx}_mse"] = float(np.mean(dim_mses))
+            per_dim_stats[f"dim_{dim_idx}_mae"] = float(np.mean(dim_maes))
+        
+        metrics.update(per_dim_stats)
+        
+        # Save detailed evaluation results
         eval_summary = {
             "step": step,
             "metrics": metrics,
-            "per_batch_losses": test_losses,
+            "per_sample_errors": action_errors,  # Detailed per-sample errors
+            "sample_predictions_vs_groundtruth": [
+                {
+                    "sample_idx": i,
+                    "predicted": all_predictions[i],
+                    "ground_truth": all_ground_truth[i],
+                }
+                for i in range(min(20, len(all_predictions)))  # Save first 20 samples for inspection
+            ]
         }
         
         eval_file = eval_dir / f"eval_step_{step:06d}.json"
         with open(eval_file, "w") as f:
             json.dump(eval_summary, f, indent=2)
         
+        # Save per-sample errors as CSV table for easy analysis
+        import csv
+        csv_file = eval_dir / f"eval_step_{step:06d}_per_sample.csv"
+        with open(csv_file, "w", newline="") as f:
+            if action_errors:
+                # Create header with all dimension columns
+                num_dims = len(action_errors[0]["per_dim_mse"])
+                fieldnames = ["sample_idx", "batch", "mse", "mae"]
+                for dim_idx in range(num_dims):
+                    fieldnames.extend([f"dim_{dim_idx}_mse", f"dim_{dim_idx}_mae"])
+                
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for err in action_errors:
+                    row = {
+                        "sample_idx": err["sample_idx"],
+                        "batch": err["batch"],
+                        "mse": f"{err['mse']:.6f}",
+                        "mae": f"{err['mae']:.6f}",
+                    }
+                    for dim_idx in range(num_dims):
+                        row[f"dim_{dim_idx}_mse"] = f"{err['per_dim_mse'][dim_idx]:.6f}"
+                        row[f"dim_{dim_idx}_mae"] = f"{err['per_dim_mae'][dim_idx]:.6f}"
+                    writer.writerow(row)
+        
+        # Append summary metrics to a cumulative CSV file across all evaluations
+        summary_csv = eval_dir / "evaluation_summary.csv"
+        file_exists = summary_csv.exists()
+        with open(summary_csv, "a", newline="") as f:
+            fieldnames = ["step"] + list(metrics.keys())
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            
+            if not file_exists:
+                writer.writeheader()
+            
+            row = {"step": step}
+            row.update({k: f"{v:.6f}" if isinstance(v, float) else v for k, v in metrics.items()})
+            writer.writerow(row)
+        
         # Log to console
         logging.info(f"\n{'='*70}")
         logging.info(f"Test Set Evaluation - Step {step}")
         logging.info(f"{'='*70}")
-        logging.info(f"  Batches evaluated: {metrics['num_test_batches']}")
-        logging.info(f"  Test loss (avg): {metrics['test_loss']:.4f}")
-        logging.info(f"  Test loss (std): {metrics['test_loss_std']:.4f}")
-        logging.info(f"  Test loss (min): {metrics['test_loss_min']:.4f}")
-        logging.info(f"  Test loss (max): {metrics['test_loss_max']:.4f}")
+        logging.info(f"  Samples evaluated: {metrics['num_samples']}")
+        logging.info(f"")
+        logging.info(f"  Action Prediction Metrics:")
+        logging.info(f"    MSE: {metrics['action_mse']:.6f} ± {metrics['action_mse_std']:.6f}")
+        logging.info(f"    MAE: {metrics['action_mae']:.6f} ± {metrics['action_mae_std']:.6f}")
+        logging.info(f"")
+        logging.info(f"  Per-Dimension MSE:")
+        for dim_idx in range(num_dims):
+            logging.info(f"    Dim {dim_idx}: {metrics[f'dim_{dim_idx}_mse']:.6f} (MAE: {metrics[f'dim_{dim_idx}_mae']:.6f})")
         logging.info(f"{'='*70}\n")
         
         return metrics
@@ -374,10 +471,13 @@ def main(config: _config.TrainConfig):
                 try:
                     eval_metrics = evaluate_on_test_set(
                         train_state=train_state,
-                        data_loader=data_loader,
+                        config=config,
                         train_step_fn=functools.partial(train_step, config),
                         step=step,
                         checkpoint_dir=checkpoint_manager.directory,
+                        mesh=mesh,
+                        data_iter=data_iter,
+                        rng=train_rng,  # Pass the training random key
                         max_eval_batches=20,
                     )
                     
@@ -385,7 +485,6 @@ def main(config: _config.TrainConfig):
                     if eval_metrics:
                         wandb_eval_metrics = {f"eval/{k}": v for k, v in eval_metrics.items()}
                         wandb.log(wandb_eval_metrics, step=step)
-                        
                 except Exception as e:
                     logging.error(f"Evaluation failed: {e}")
                     import traceback
