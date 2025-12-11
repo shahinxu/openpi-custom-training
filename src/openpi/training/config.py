@@ -1056,7 +1056,7 @@ _CONFIGS = [
             local_dir="/home/rzh/zhenx/openpi/data/train_test_dataset",
         ),
         batch_size=32,
-        num_train_steps=1000,
+        num_train_steps=2000,
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=100,
             peak_lr=3e-4,
