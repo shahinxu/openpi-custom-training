@@ -1039,7 +1039,7 @@ _CONFIGS = [
         ema_decay=None,
         log_interval=20,
         save_interval=200,
-        keep_period=200,
+        keep_period=None,  # Only keep the latest checkpoint
     ),
     TrainConfig(
         name="pi05_train_test",
@@ -1075,7 +1075,7 @@ _CONFIGS = [
         ema_decay=None,
         log_interval=20,
         save_interval=200,
-        keep_period=200,
+        keep_period=None,  # Only keep the latest checkpoint
     ),
     *roboarena_config.get_roboarena_configs(),
 ]
