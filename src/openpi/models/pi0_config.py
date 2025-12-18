@@ -13,8 +13,6 @@ import openpi.shared.nnx_utils as nnx_utils
 
 if TYPE_CHECKING:
     from openpi.models.pi0 import Pi0
-
-
 @dataclasses.dataclass(frozen=True)
 class Pi0Config(_model.BaseModelConfig):
     dtype: str = "bfloat16"
@@ -25,11 +23,7 @@ class Pi0Config(_model.BaseModelConfig):
     action_dim: int = 32
     action_horizon: int = 50
     max_token_len: int = None  # type: ignore
-    # Pi05 has two differences from Pi0:
-    # - the state input is part of the discrete language tokens rather than a continuous input that is part of the suffix
-    # - the action expert uses adaRMSNorm to inject the flow matching timestep
     pi05: bool = False
-    # This config option is not used directly by the model, but it is read by the ModelTransformFactory.
     discrete_state_input: bool = None  # type: ignore
 
     def __post_init__(self):
@@ -87,7 +81,6 @@ class Pi0Config(_model.BaseModelConfig):
                 gemma_params_filter,
             )
             if "lora" not in self.action_expert_variant:
-                # If only freeze gemma params, exclude action expert params.
                 filters.append(
                     nnx.Not(action_expert_params_filter),
                 )
@@ -99,7 +92,6 @@ class Pi0Config(_model.BaseModelConfig):
             has_lora = True
 
         if has_lora:
-            # If any lora is used, exclude all lora params.
             filters.append(
                 nnx.Not(nnx_utils.PathRegex(".*lora.*")),
             )

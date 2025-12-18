@@ -14,15 +14,11 @@ from pathlib import Path
 import tqdm
 
 import openpi.shared.download as download
-
-
 class DroidActionSpace(Enum):
     """Action space for DROID dataset."""
 
     JOINT_POSITION = auto()
     JOINT_VELOCITY = auto()
-
-
 class DroidRldsDataset:
     def __init__(
         self,
@@ -31,16 +27,13 @@ class DroidRldsDataset:
         *,  # Force keyword-only arguments
         shuffle: bool = True,
         action_chunk_size: int = 16,
-        # We default to joint position actions, since they allow policy evaluation in simulation.
         action_space: DroidActionSpace = DroidActionSpace.JOINT_POSITION,
         max_loaded_steps_per_episode: int = 100,
-        # Reduce this if you are running out of memory, but careful -- below ~100k shuffling is not sufficiently random.
         shuffle_buffer_size: int = 250_000,
         num_parallel_reads: int = -1,  # -1 == tf.data.AUTOTUNE -- hack to not import tf at top level
         num_parallel_calls: int = -1,  # -1 == tf.data.AUTOTUNE -- hack to not import tf at top level
         filter_dict_path=None,  # Path to json file with indices to sample during training
     ):
-        # Import tensorflow here to not make it mandatory in case RLDS data loader is not used.
         import dlimp as dl
         import tensorflow as tf
         import tensorflow_datasets as tfds
@@ -62,12 +55,6 @@ class DroidRldsDataset:
         dataset = dataset.repeat()
 
         # Load the filter dictionary if provided.
-        # The filter dictionary is a JSON file that maps episode keys to ranges of frames to sample
-        # (e.g.,
-        # {
-        #     "<episode key>": [[0, 100], [200, 300]]
-        # }
-        # means keep frames 0-99 and 200-299).
         if filter_dict_path is not None:
             cached_filter_dict_path = download.maybe_download(filter_dict_path)
             with Path(cached_filter_dict_path).open("r") as f:
@@ -95,7 +82,6 @@ class DroidRldsDataset:
 
         def restructure(traj):
             """Reformat observation and action keys, sample language instruction."""
-            # Important: we use joint *position* action space -- easier to simulate!
             actions = tf.concat(
                 (
                     (
@@ -107,15 +93,12 @@ class DroidRldsDataset:
                 ),
                 axis=-1,
             )
-            # Randomly samples one of the two exterior images in DROID during training (we only train with one at a time).
-            # Note: the "left" refers to the left camera in the stereo pair, we only train on the left camera.
             exterior_img = tf.cond(
                 tf.random.uniform(shape=[]) > 0.5,
                 lambda: traj["observation"]["exterior_image_1_left"],
                 lambda: traj["observation"]["exterior_image_2_left"],
             )
             wrist_img = traj["observation"]["wrist_image_left"]
-            # Randomly sample one of the three language instructions
             instruction = tf.random.shuffle(
                 [traj["language_instruction"], traj["language_instruction_2"], traj["language_instruction_3"]]
             )[0]
@@ -124,9 +107,6 @@ class DroidRldsDataset:
             indices = tf.as_string(tf.range(traj_len))
 
             # Data filtering:
-            # Compute a uniquely-identifying step ID by concatenating the recording folderpath, file path,
-            # and each step's time step index. This will index into the filter hash table, and if it returns true,
-            # then the frame passes the filter.
             step_id = (
                 traj["traj_metadata"]["episode_metadata"]["recording_folderpath"]
                 + "--"
@@ -165,7 +145,6 @@ class DroidRldsDataset:
             )
 
             # Cap to length of the sequence --> final chunks will repeat the last action
-            # This makes sense, since we are using absolute joint + gripper position actions
             action_chunk_indices = tf.minimum(action_chunk_indices, traj_len - 1)
 
             # Gather the actions for each chunk
@@ -205,7 +184,6 @@ class DroidRldsDataset:
         # Shuffle, batch
         dataset = dataset.shuffle(shuffle_buffer_size)
         dataset = dataset.batch(batch_size)
-        # Note =>> Seems to reduce memory usage without affecting speed?
         dataset = dataset.with_ram_budget(1)
 
         self.dataset = dataset
@@ -216,6 +194,4 @@ class DroidRldsDataset:
         yield from self.dataset.as_numpy_iterator()
 
     def __len__(self):
-        # This is the approximate number of samples in DROID after filtering.
-        # Easier to hardcode than to iterate through the dataset and compute it.
         return 20_000_000

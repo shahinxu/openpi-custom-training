@@ -10,8 +10,6 @@ from flax.struct import dataclass
 from flax.typing import Array
 import jax
 import jax.numpy as jnp
-
-
 class FsqCodebook(nn.Module):
     input_dim: int
     target_codebook_size: int
@@ -123,8 +121,6 @@ class FsqCodebook(nn.Module):
     @property
     def vocab_size(self) -> int:
         return math.prod(self.bins_per_dim)
-
-
 class ResNetDownBlock(nn.Module):
     stride: int = 1
     n_filters: int = 64
@@ -145,8 +141,6 @@ class ResNetDownBlock(nn.Module):
         x = nn.Conv(self.n_filters, (3,), (1,), "SAME")(x)
 
         return skip + x
-
-
 class ResNetUpBlock(nn.Module):
     stride: int = 1
     n_filters: int = 64
@@ -167,8 +161,6 @@ class ResNetUpBlock(nn.Module):
         x = nn.ConvTranspose(self.n_filters, (3,), (1,), "SAME")(x)
 
         return skip + x
-
-
 @dataclass
 class LfqCodebookOutput:
     tokens: jnp.ndarray
@@ -176,8 +168,6 @@ class LfqCodebookOutput:
     z_q: jnp.ndarray
     token_log_probs: jnp.ndarray
     commit_loss: jnp.ndarray
-
-
 class LookupFreeQuantization(nn.Module):
     num_dims: int
     latent_dim: int
@@ -207,7 +197,6 @@ class LookupFreeQuantization(nn.Module):
         tokens = jnp.argmin(token_squared_distances, axis=-1)
 
         token_bit_log_probs = -token_squared_distances
-        # Compute token log probs for tokens 0..2^num_dims-1 by summing corresponding log-probs
         token_bit_expansions = jnp.bitwise_and(
             jnp.arange(2**self.num_dims)[None, :], 2 ** jnp.arange(self.num_dims)[:, None]
         ).astype(jnp.int32)
@@ -233,12 +222,8 @@ class LookupFreeQuantization(nn.Module):
             token_log_probs=jnp.zeros(()),
             commit_loss=commit_loss,
         )
-
-
 def make_block_causal_attention_matrix(q: jnp.ndarray, k: jnp.ndarray, bs_q: int, bs_k: int) -> jnp.ndarray:
     return nn.make_attention_mask(q, k, pairwise_fn=lambda x, y: jnp.greater_equal(x // bs_k, y // bs_q))
-
-
 class GeGLU(Module):
     """Gated Linear Unit with GELU (GeGLU) activation function.
     GeGLU is a Flax layer that combines a linear transformation with a GELU
@@ -264,8 +249,6 @@ class GeGLU(Module):
         x = nn.Dense(output_dim * 2)(inputs)
         x, gate = x[..., :output_dim], x[..., output_dim:]
         return x * nn.gelu(gate)
-
-
 class CrossAttentionLayer(nn.Module):
     dropout_rate: float = 0.0
     num_heads: int = None
@@ -287,7 +270,6 @@ class CrossAttentionLayer(nn.Module):
         seq_len_k = y.shape[-2]
 
         if self.causal:
-            # One block size will be 1
             bs_q = max(seq_len_q // seq_len_k, 1)
             bs_k = max(seq_len_k // seq_len_q, 1)
 
@@ -322,8 +304,6 @@ class CrossAttentionLayer(nn.Module):
         x = GeGLU()(x)
         x = nn.Dense(d_embed)(x)
         return skip + x
-
-
 def sinusoidal_pe_init(_, shape: tuple[int, int]) -> jnp.ndarray:
     seq_len, d_embed = shape
 
@@ -336,8 +316,6 @@ def sinusoidal_pe_init(_, shape: tuple[int, int]) -> jnp.ndarray:
         ],
         axis=-1,
     )
-
-
 class TokenizerEncoderDecoder(nn.Module):
     num_tokens: int
     num_cross_tokens: int
@@ -360,7 +338,6 @@ class TokenizerEncoderDecoder(nn.Module):
         x = jax.numpy.broadcast_to(x, y.shape[:-2] + x.shape[-2:])
 
         if mask is not None:
-            # mask is (batch_dims..., num_cross_tokens)
             chex.assert_equal_shape([y[..., 0], mask])
             attn_mask = einops.repeat(mask, "... kv -> ... 1 q kv", q=self.num_tokens)
         else:
@@ -380,8 +357,6 @@ class TokenizerEncoderDecoder(nn.Module):
             )
 
         return x
-
-
 class FsqAttentionTokenizer(nn.Module):
     embed_dim: int
     data_dim: int
@@ -446,7 +421,6 @@ class FsqAttentionTokenizer(nn.Module):
     def loss(
         self, action: jnp.ndarray, *, obs: jnp.ndarray | None = None, train: bool = True
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
-        # Encode
         x = self.proj(action)
         z = self.encoder(x, train=train, state_conditioning=obs)
 

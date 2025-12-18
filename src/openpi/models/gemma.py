@@ -1,16 +1,6 @@
-# Copyright 2024 Big Vision Authors.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 """Gemma adaptation for Pi, taken from big_vision.
 
@@ -39,8 +29,6 @@ import openpi.shared.array_typing as at
 import openpi.training.sharding as sharding
 
 PALIGEMMA_VOCAB_SIZE = 257_152
-
-
 @dataclasses.dataclass
 class Config:
     width: int
@@ -50,11 +38,7 @@ class Config:
     num_kv_heads: int
     head_dim: int
     lora_configs: dict[str, lora.LoRAConfig] = dataclasses.field(default_factory=dict)
-
-
 Variant = Literal["dummy", "gemma_300m", "gemma_300m_lora", "gemma_2b", "gemma_2b_lora"]
-
-
 def get_config(variant: Variant) -> Config:
     """Returns config for specified gemma variant."""
     if variant == "dummy":
@@ -67,7 +51,6 @@ def get_config(variant: Variant) -> Config:
             head_dim=16,
         )
     if variant == "gemma_300m":
-        # 311M params
         return Config(
             width=1024,
             depth=18,
@@ -96,7 +79,6 @@ def get_config(variant: Variant) -> Config:
             lora_configs={"attn": lora.LoRAConfig(rank=16, alpha=16.0), "ffn": lora.LoRAConfig(rank=16, alpha=16.0)},
         )
     if variant == "gemma_300m_lora":
-        # 311M params
         return Config(
             width=1024,
             depth=18,
@@ -107,8 +89,6 @@ def get_config(variant: Variant) -> Config:
             lora_configs={"attn": lora.LoRAConfig(rank=32, alpha=32.0), "ffn": lora.LoRAConfig(rank=32, alpha=32.0)},
         )
     raise ValueError(f"Unknown variant: {variant}")
-
-
 @at.typecheck
 class RMSNorm(nn.Module):
     @nn.compact
@@ -117,7 +97,6 @@ class RMSNorm(nn.Module):
         var = jnp.mean(jnp.square(x.astype(jnp.float32)), axis=-1, keepdims=True)  # compute variance in float32
         normed_inputs = jnp.asarray(x * jnp.reciprocal(jnp.sqrt(var + 1e-06)))  # compute normalization in float32
         if cond is None:
-            # regular RMSNorm
             scale = self.param("scale", nn.initializers.zeros_init(), (x.shape[-1]))
             normed_inputs = normed_inputs * (
                 1 + scale
@@ -129,8 +108,6 @@ class RMSNorm(nn.Module):
         scale, shift, gate = jnp.split(modulation[:, None, :], 3, axis=-1)
         normed_inputs = normed_inputs * (1 + scale) + shift  # scale and shift in float32
         return normed_inputs.astype(dtype), gate
-
-
 @at.typecheck
 class Embedder(nn.Module):
     """Embedder module."""
@@ -152,8 +129,6 @@ class Embedder(nn.Module):
 
     def decode(self, x):
         return jnp.dot(x, self.input_embedding_table.T)
-
-
 @at.typecheck
 class Attention(nn.Module):
     """Attention module."""
@@ -162,7 +137,6 @@ class Attention(nn.Module):
 
     @nn.compact
     def __call__(self, xs, positions, attn_mask, kv_cache):
-        # all experts must share the same head dim, num heads, and num kv heads for self-attention to work
         assert all(config.head_dim == self.configs[0].head_dim for config in self.configs)
         assert all(config.num_heads == self.configs[0].num_heads for config in self.configs)
         assert all(config.num_kv_heads == self.configs[0].num_kv_heads for config in self.configs)
@@ -247,8 +221,6 @@ class Attention(nn.Module):
                 out.append(None)
 
         return out, (k, v)
-
-
 @at.typecheck
 class FeedForward(nn.Module):
     """Feed forward module."""
@@ -278,8 +250,6 @@ class FeedForward(nn.Module):
         outputs = jnp.dot(activations, w_linear)
         assert outputs.dtype == dtype
         return outputs
-
-
 @at.typecheck
 class Block(nn.Module):
     """Transformer block."""
@@ -331,11 +301,7 @@ class Block(nn.Module):
         xs = sharding.activation_sharding_constraint(xs)
 
         return xs, kv_cache
-
-
 KVCache: TypeAlias = tuple[at.Float[at.Array, "l b _t _k _h"], at.Float[at.Array, "l b _t _v _h"]]
-
-
 @at.typecheck
 class Module(nn.Module):
     """Transformer model, supporting a mixture of different weights for different tokens."""
@@ -348,7 +314,6 @@ class Module(nn.Module):
     adarms: bool = False
 
     def setup(self):
-        # all experts must have the same depth
         assert all(config.depth == self.configs[0].depth for config in self.configs)
 
         self.embedder = Embedder(
@@ -388,7 +353,6 @@ class Module(nn.Module):
     @at.typecheck
     def __call__(
         self,
-        # list of token arrays, one for each expert, or None if that expert should not be run
         embedded: Sequence[at.Float[at.Array, "b _t _d"] | None],
         positions: at.Int[at.Array, "b t"],
         mask: at.Bool[at.Array, "b t s"],
@@ -419,8 +383,6 @@ class Module(nn.Module):
             jnp.zeros((1, len(self.configs), len(self.configs)), dtype=bool),
             adarms_cond=[jnp.zeros((1, c.width)) if u else None for u, c in zip(use_adarms, self.configs, strict=True)],
         )
-
-
 def _apply_rope(x, *, positions, max_wavelength=10_000):
     """Applies RoPE positions [B, L] to x [B, L, H, D]."""
     freq_exponents = (2.0 / x.shape[-1]) * jnp.arange(x.shape[-1] // 2, dtype=jnp.float32)
@@ -428,28 +390,15 @@ def _apply_rope(x, *, positions, max_wavelength=10_000):
     radians = positions[..., None] / timescale[None, None, :]
     radians = radians[..., None, :]
     assert radians.dtype == jnp.float32
-    # radians.shape = [...,L,1,d=D/2]
     sin, cos = jnp.sin(radians), jnp.cos(radians)
     x1, x2 = jnp.split(x, 2, axis=-1)
     res = jnp.concatenate([x1 * cos - x2 * sin, x2 * cos + x1 * sin], axis=-1)
     assert res.dtype == jnp.float32
-    # The original bigvision impl allows RoPE to upcast to float32. It is then immediately downcast again to the cache
-    # dtype when in inference mode (but not in training mode). I don't think any of this was intentional. Based on the
-    # original DeepMind impl, as well as the widely-used transformers impl, it is ok to always downcast back to bfloat16
-    # here.
     return res.astype(x.dtype)
-
-
 def _name(name, i):
-    # we name layers like this because we want the first expert's weights to have no suffix (e.g., "attn"), so that they
-    # can be loaded seamlessly from the existing PaliGemma checkpoint. subsequent experts will have a suffix (e.g.,
-    # "attn_1") and their weights will be initialized from scratch. in practice, we only use two experts -- PaliGemma,
-    # and the action expert.
     if i == 0:
         return name
     return f"{name}_{i}"
-
-
 def _gated_residual(x, y, gate):
     assert (x is None) == (y is None)
     if x is None:

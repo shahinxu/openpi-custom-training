@@ -1,4 +1,3 @@
-"""RoboArena baseline policy configs."""
 
 from typing import TypeAlias
 
@@ -10,10 +9,7 @@ import openpi.policies.droid_policy as droid_policy
 import openpi.transforms as _transforms
 
 ModelType: TypeAlias = _model.ModelType
-
-
 def get_roboarena_configs():
-    # Import here to avoid circular imports.
     from openpi.training.config import AssetsConfig
     from openpi.training.config import DataConfig
     from openpi.training.config import SimpleDataConfig
@@ -21,10 +17,8 @@ def get_roboarena_configs():
 
     return [
         #
-        # RoboArena DROID baseline inference configs.
         #
         TrainConfig(
-            # Trained from PaliGemma, using RT-2 / OpenVLA style binning tokenizer.
             name="paligemma_binning_droid",
             model=pi0_fast.Pi0FASTConfig(
                 action_dim=8,
@@ -44,7 +38,6 @@ def get_roboarena_configs():
             ),
         ),
         TrainConfig(
-            # Trained from PaliGemma, using FAST tokenizer (using universal FAST+ tokenizer).
             name="paligemma_fast_droid",
             model=pi0_fast.Pi0FASTConfig(action_dim=8, action_horizon=15),
             data=SimpleDataConfig(
@@ -59,7 +52,6 @@ def get_roboarena_configs():
             ),
         ),
         TrainConfig(
-            # Trained from PaliGemma, using FAST tokenizer (tokenizer trained on DROID dataset).
             name="paligemma_fast_specialist_droid",
             model=pi0_fast.Pi0FASTConfig(
                 action_dim=8,
@@ -79,7 +71,6 @@ def get_roboarena_configs():
             ),
         ),
         TrainConfig(
-            # Trained from PaliGemma, using FSQ tokenizer.
             name="paligemma_vq_droid",
             model=pi0_fast.Pi0FASTConfig(
                 action_dim=8,
@@ -99,7 +90,6 @@ def get_roboarena_configs():
             ),
         ),
         TrainConfig(
-            # pi0-style diffusion / flow VLA, trained on DROID from PaliGemma.
             name="paligemma_diffusion_droid",
             model=pi0_config.Pi0Config(action_horizon=10, action_dim=8),
             data=SimpleDataConfig(

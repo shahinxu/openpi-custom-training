@@ -18,8 +18,6 @@ import openpi.shared.nnx_utils as nnx_utils
 logger = logging.getLogger("openpi")
 
 PALIGEMMA_EOS_TOKEN = 1
-
-
 def make_attn_mask(input_mask, mask_ar):
     """Adapted from big_vision.
 
@@ -46,12 +44,9 @@ def make_attn_mask(input_mask, mask_ar):
     attn_mask = cumsum[:, None, :] <= cumsum[:, :, None]
     valid_mask = input_mask[:, None, :] * input_mask[:, :, None]
     return jnp.logical_and(attn_mask, valid_mask)
-
-
 @jax.vmap
 def left_to_right_align(x, input_mask, attn_mask):
     """Converts input from left-align to right-aligned."""
-    # Due to vmap, this is operating in a single example (not batch level).
     assert x.ndim == 2
     assert input_mask.ndim == 1
     assert attn_mask.ndim == 2
@@ -62,8 +57,6 @@ def left_to_right_align(x, input_mask, attn_mask):
     input_mask = jnp.roll(input_mask, -seqlen, axis=0)
     attn_mask = jnp.roll(attn_mask, -seqlen, axis=(0, 1))
     return x, input_mask, attn_mask
-
-
 def put_along_last_axis(arr, indices, values):
     """Like np.put_along_axis(..., axis=-1), since jax is missing it."""
     assert arr.ndim == indices.ndim == values.ndim, (arr.ndim, indices.ndim, values.ndim)
@@ -71,8 +64,6 @@ def put_along_last_axis(arr, indices, values):
     put_mask = jnp.einsum("...i,...in->...n", jnp.ones(values.shape, jnp.int32), onehot)
     put_values = jnp.einsum("...i,...in->...n", values, onehot)
     return jnp.where(put_mask, put_values, arr)
-
-
 @dataclasses.dataclass(frozen=True)
 class Pi0FASTConfig(_model.BaseModelConfig):
     dtype: str = "bfloat16"
@@ -85,7 +76,6 @@ class Pi0FASTConfig(_model.BaseModelConfig):
 
     # Tokenizer for the fast model.
     fast_model_tokenizer: Any | None = None
-    # Keyword arguments for the fast model tokenizer.
     fast_model_tokenizer_kwargs: dict[str, Any] | None = None
 
     @property
@@ -129,13 +119,10 @@ class Pi0FASTConfig(_model.BaseModelConfig):
         if "lora" in self.paligemma_variant:
             return nnx.All(nnx_utils.PathRegex(".*llm.*"), nnx.Not(nnx_utils.PathRegex(".*lora.*")))
         return nnx.Nothing
-
-
 class Pi0FAST(_model.BaseModel):
     def __init__(self, config: Pi0FASTConfig, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         paligemma_config = _gemma.get_config(config.paligemma_variant)
-        # TODO: rewrite gemma in NNX. For now, use bridge.
         llm = nnx_bridge.ToNNX(
             _gemma.Module(
                 **paligemma_config,
@@ -163,7 +150,6 @@ class Pi0FAST(_model.BaseModel):
         input_mask = []
         ar_mask = []
         token_embeddings = []
-        # embed images
         for name in obs.images:
             image_token_embeddings, _ = self.PaliGemma.img(obs.images[name], train=False)
 
@@ -175,7 +161,6 @@ class Pi0FAST(_model.BaseModel):
                     s=image_token_embeddings.shape[1],
                 )
             )
-            # image tokens attend to each other --> AR mask = 0
             ar_mask.append(0 * input_mask[-1])
 
         # add tokenized inputs
@@ -220,7 +205,6 @@ class Pi0FAST(_model.BaseModel):
         )
 
         # Only decode logits for the target tokens to save memory
-        # (decoding matmul is large because it is a seq_len x vocab_size dense layer).
         logits, _ = self.PaliGemma.llm(
             pre_logits=pre_logits[:, -targets.shape[1] :],
         )
@@ -241,7 +225,6 @@ class Pi0FAST(_model.BaseModel):
         max_decoding_steps: int | at.Int[at.Array, ""] = 256,
         temperature: float = 0.0,
     ) -> _model.Actions:
-        # TODO: this is a hack to get the image keys.
         observation = _model.preprocess_observation(
             None, observation, train=False, image_keys=list(observation.images.keys())
         )
@@ -259,7 +242,6 @@ class Pi0FAST(_model.BaseModel):
         prefix_start = prefill_size - prefill_len
 
         # first fill KV cache with a forward pass of the prefix
-        # pad attention mask to set the size of the KV cache (prefill_size + max_decoding_steps)
         prefix_attn_mask = jnp.pad(prefix_attn_mask, ((0, 0), (0, 0), (0, max_decoding_steps)))
         prefix_positions = jnp.cumsum(prefix_mask, axis=-1) - 1
         prefix_logits, kv_cache, _ = self.PaliGemma.llm(
@@ -274,7 +256,6 @@ class Pi0FAST(_model.BaseModel):
             rng, last_logit, output_tokens, cache, _, step = carry
 
             # Sample token from last logit
-            # Split RNG for this step
             rng, rng_step = jax.random.split(rng)
             token = jax.lax.cond(
                 temperature > 0.0,

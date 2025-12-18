@@ -6,14 +6,9 @@ import numpy as np
 
 BATCH_AXIS = "batch"
 FSDP_AXIS = "fsdp"
-# In FSDP, we shard the data across both the batch and FSDP axes.
 DATA_AXIS = (BATCH_AXIS, FSDP_AXIS)
-
-
 class _MeshState:
     active_mesh: jax.sharding.Mesh | None = None
-
-
 def make_mesh(num_fsdp_devices: int) -> jax.sharding.Mesh:
     if jax.device_count() % num_fsdp_devices != 0:
         raise ValueError(
@@ -21,8 +16,6 @@ def make_mesh(num_fsdp_devices: int) -> jax.sharding.Mesh:
         )
     mesh_shape = (jax.device_count() // num_fsdp_devices, num_fsdp_devices)
     return jax.make_mesh(mesh_shape, (BATCH_AXIS, FSDP_AXIS))
-
-
 @contextlib.contextmanager
 def set_mesh(mesh: jax.sharding.Mesh):
     """Plumbing the mesh deep into the module tree is extremeley cumbersome; until the JAX team lands a better API, a
@@ -35,16 +28,12 @@ def set_mesh(mesh: jax.sharding.Mesh):
         yield
     finally:
         _MeshState.active_mesh = None
-
-
 def activation_sharding_constraint(pytree):
     if _MeshState.active_mesh is None:
         return pytree
     return jax.lax.with_sharding_constraint(
         pytree, jax.sharding.NamedSharding(_MeshState.active_mesh, jax.sharding.PartitionSpec(DATA_AXIS))
     )
-
-
 def fsdp_sharding(
     pytree,
     mesh: jax.sharding.Mesh,
@@ -68,15 +57,12 @@ def fsdp_sharding(
     min_size_bytes = min_size_mbytes * 2**20
 
     def _shard_arr(kp, array: jax.ShapeDtypeStruct):
-        # if fsdp is not actually going to be used, replicate everything to avoid extraneous logging
         if mesh.shape[FSDP_AXIS] == 1:
             return jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
-        # replicate scalar and vector arrays
         if not hasattr(array, "shape"):
             return jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
         if len(array.shape) < 2:
             return jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
-        # replicate small arrays
         if (arr_size := np.prod(array.shape) * np.dtype(array.dtype).itemsize) < min_size_bytes:
             return jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
 

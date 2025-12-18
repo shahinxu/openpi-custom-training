@@ -1,16 +1,6 @@
-# Copyright 2024 Big Vision Authors.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 """A refactored and simplified ViT adoptation for Pi, taken from big_vision."""
 
@@ -22,8 +12,6 @@ import jax.numpy as jnp
 import numpy as np
 
 import openpi.training.sharding as sharding
-
-
 def posemb_sincos_2d(h, w, width, temperature=10_000.0, dtype=jnp.float32):
     """Follows the MoCo v3 logic."""
     y, x = jnp.mgrid[:h, :w]
@@ -35,8 +23,6 @@ def posemb_sincos_2d(h, w, width, temperature=10_000.0, dtype=jnp.float32):
     x = jnp.einsum("m,d->md", x.flatten(), omega)
     pe = jnp.concatenate([jnp.sin(x), jnp.cos(x), jnp.sin(y), jnp.cos(y)], axis=1)
     return jnp.asarray(pe, dtype)[None, :, :]
-
-
 def get_posemb(self, typ, seqshape, width, name, dtype=jnp.float32):
     if typ == "learn":
         return self.param(
@@ -48,8 +34,6 @@ def get_posemb(self, typ, seqshape, width, name, dtype=jnp.float32):
     if typ == "sincos2d":
         return posemb_sincos_2d(*seqshape, width, dtype=dtype)
     raise ValueError(f"Unknown posemb type: {typ}")
-
-
 class MlpBlock(nn.Module):
     """Transformer MLP / feed-forward block."""
 
@@ -70,8 +54,6 @@ class MlpBlock(nn.Module):
         x = nn.gelu(x)
         x = nn.Dropout(rate=self.dropout)(x, deterministic)
         return nn.Dense(d, dtype=self.dtype_mm, **inits)(x)
-
-
 class Encoder1DBlock(nn.Module):
     """Single transformer encoder block (MHSA + MLP)."""
 
@@ -106,8 +88,6 @@ class Encoder1DBlock(nn.Module):
         x = out["+mlp"] = x + y
         x = sharding.activation_sharding_constraint(x)
         return x, out
-
-
 class Encoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation."""
 
@@ -146,7 +126,6 @@ class Encoder(nn.Module):
             for lyr in range(self.depth):
                 out[f"block{lyr:02d}"] = jax.tree.map(lambda o, lyr=lyr: o[lyr], scan_out)
         else:
-            # Input Encoder
             for lyr in range(self.depth):
                 block_cur = Encoder1DBlock(
                     name=f"encoderblock_{lyr}",
@@ -159,8 +138,6 @@ class Encoder(nn.Module):
             out["pre_ln"] = x  # Alias for last block, but without the number in it.
 
         return nn.LayerNorm(name="encoder_norm", dtype=self.dtype_mm)(x), out
-
-
 class MAPHead(nn.Module):
     """Multihead Attention Pooling."""
 
@@ -183,8 +160,6 @@ class MAPHead(nn.Module):
         y = nn.LayerNorm(dtype=self.dtype_mm)(x)
         x = x + MlpBlock(mlp_dim=self.mlp_dim, dtype=self.dtype_mm)(y)
         return x[:, 0]
-
-
 class _Module(nn.Module):
     """ViT model."""
 
@@ -200,7 +175,6 @@ class _Module(nn.Module):
     pool_type: str = "gap"  # Can also be "map" or "tok"
     head_zeroinit: bool = True
     scan: bool = False
-    # or "dots_with_no_batch_dims_saveable" for more speed (memory costly)
     remat_policy: str = "nothing_saveable"
     dtype_mm: str = "float32"
 
@@ -209,7 +183,6 @@ class _Module(nn.Module):
         out = {}
 
         # Kevin edit: do patch extraction and posemb in float32,
-        # because I feel like it's a bit safer.
         image = jnp.asarray(image, jnp.float32)
 
         # Patch extraction
@@ -273,8 +246,6 @@ class _Module(nn.Module):
         if self.rep_size:
             rep_size = self.width if self.rep_size is True else self.rep_size
             hid = nn.Dense(rep_size, dtype=self.dtype_mm, name="pre_logits")
-            # NOTE: In the past we did not include tanh in pre_logits.
-            # For few-shot, it should not matter much, as it whitens anyways.
             x_2d = nn.tanh(hid(x_2d))
             x = nn.tanh(hid(x))
 
@@ -288,13 +259,9 @@ class _Module(nn.Module):
             x = out["logits"] = head(x)
 
         return x, out
-
-
 def Module(num_classes=None, *, variant=None, **kw):  # pylint: disable=invalid-name  # noqa: N802
     """Factory function, because linen really don't like what I'm doing!"""
     return _Module(num_classes, **{**decode_variant(variant), **kw})
-
-
 def decode_variant(variant):
     """Converts a string like "B" or "B/32" into a params dict."""
     if variant is None:
@@ -306,8 +273,6 @@ def decode_variant(variant):
         patch = {"patch_size": (int(patch), int(patch))}
 
     return {
-        # pylint:disable=line-too-long
-        # Reference: Table 2 of https://arxiv.org/abs/2106.04560.
         "width": {
             "mu": 32,
             "Ti": 192,
@@ -368,6 +333,5 @@ def decode_variant(variant):
             "G-opt": 16,
             "e": 16,
         }[v],
-        # pylint:enable=line-too-long
         **patch,
     }

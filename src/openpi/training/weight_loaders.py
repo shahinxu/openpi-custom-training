@@ -11,8 +11,6 @@ import openpi.shared.array_typing as at
 import openpi.shared.download as download
 
 logger = logging.getLogger(__name__)
-
-
 @runtime_checkable
 class WeightLoader(Protocol):
     def load(self, params: at.Params) -> at.Params:
@@ -26,14 +24,10 @@ class WeightLoader(Protocol):
             Loaded parameters. The structure must be identical to `params`. If returning a subset of
             the parameters the loader must merge the loaded parameters with `params`.
         """
-
-
 @dataclasses.dataclass(frozen=True)
 class NoOpWeightLoader(WeightLoader):
     def load(self, params: at.Params) -> at.Params:
         return params
-
-
 @dataclasses.dataclass(frozen=True)
 class CheckpointWeightLoader(WeightLoader):
     """Loads an entire set of weights from a checkpoint.
@@ -48,12 +42,8 @@ class CheckpointWeightLoader(WeightLoader):
     params_path: str
 
     def load(self, params: at.Params) -> at.Params:
-        # We are loading np.ndarray and relying on the training code to properly convert and shard the params.
         loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
-        # Add all missing LoRA weights.
         return _merge_params(loaded_params, params, missing_regex=".*lora.*")
-
-
 @dataclasses.dataclass(frozen=True)
 class PaliGemmaWeightLoader(WeightLoader):
     """Loads weights from the official PaliGemma checkpoint.
@@ -69,10 +59,7 @@ class PaliGemmaWeightLoader(WeightLoader):
         with path.open("rb") as f:
             flat_params = dict(np.load(f, allow_pickle=False))
         loaded_params = {"PaliGemma": flax.traverse_util.unflatten_dict(flat_params, sep="/")["params"]}
-        # Add all missing weights.
         return _merge_params(loaded_params, params, missing_regex=".*")
-
-
 def _merge_params(loaded_params: at.Params, params: at.Params, *, missing_regex: str) -> at.Params:
     """Merges the loaded parameters with the reference parameters.
 

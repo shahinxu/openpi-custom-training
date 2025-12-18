@@ -19,15 +19,11 @@ _OPENPI_DATA_HOME = "OPENPI_DATA_HOME"
 DEFAULT_CACHE_DIR = "~/.cache/openpi"
 
 logger = logging.getLogger(__name__)
-
-
 def get_cache_dir() -> pathlib.Path:
     cache_dir = pathlib.Path(os.getenv(_OPENPI_DATA_HOME, DEFAULT_CACHE_DIR)).expanduser().resolve()
     cache_dir.mkdir(parents=True, exist_ok=True)
     _set_folder_permission(cache_dir)
     return cache_dir
-
-
 def maybe_download(url: str, *, force_download: bool = False, **kwargs) -> pathlib.Path:
     """Download a file or directory from a remote filesystem to the local cache, and return the local path.
 
@@ -44,7 +40,6 @@ def maybe_download(url: str, *, force_download: bool = False, **kwargs) -> pathl
     Returns:
         Local path to the downloaded file or directory. That path is guaranteed to exist and is absolute.
     """
-    # Don't use fsspec to parse the url to avoid unnecessary connection to the remote filesystem.
     parsed = urllib.parse.urlparse(url)
 
     # Short circuit if this is a local path.
@@ -70,9 +65,7 @@ def maybe_download(url: str, *, force_download: bool = False, **kwargs) -> pathl
     try:
         lock_path = local_path.with_suffix(".lock")
         with filelock.FileLock(lock_path):
-            # Ensure consistent permissions for the lock file.
             _ensure_permissions(lock_path)
-            # First, remove the existing cache if it is expired.
             if invalidate_cache:
                 logger.info(f"Removing expired cached entry: {local_path}")
                 if local_path.is_dir():
@@ -96,13 +89,10 @@ def maybe_download(url: str, *, force_download: bool = False, **kwargs) -> pathl
         raise PermissionError(msg) from e
 
     return local_path
-
-
 def _download_fsspec(url: str, local_path: pathlib.Path, **kwargs) -> None:
     """Download a file from a remote filesystem to the local cache, and return the local path."""
     fs, _ = fsspec.core.url_to_fs(url, **kwargs)
     info = fs.info(url)
-    # Folders are represented by 0-byte objects with a trailing forward slash.
     if is_dir := (info["type"] == "directory" or (info["size"] == 0 and info["name"].endswith("/"))):
         total_size = fs.du(url)
     else:
@@ -115,8 +105,6 @@ def _download_fsspec(url: str, local_path: pathlib.Path, **kwargs) -> None:
             pbar.update(current_size - pbar.n)
             time.sleep(1)
         pbar.update(total_size - pbar.n)
-
-
 def _set_permission(path: pathlib.Path, target_permission: int):
     """chmod requires executable permission to be set, so we skip if the permission is already match with the target."""
     if path.stat().st_mode & target_permission == target_permission:
@@ -124,13 +112,9 @@ def _set_permission(path: pathlib.Path, target_permission: int):
         return
     path.chmod(target_permission)
     logger.debug(f"Set {path} to {target_permission}")
-
-
 def _set_folder_permission(folder_path: pathlib.Path) -> None:
     """Set folder permission to be read, write and searchable."""
     _set_permission(folder_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-
-
 def _ensure_permissions(path: pathlib.Path) -> None:
     """Since we are sharing cache directory with containerized runtime as well as training script, we need to
     ensure that the cache directory has the correct permissions.
@@ -162,24 +146,15 @@ def _ensure_permissions(path: pathlib.Path) -> None:
         for dir in dirs:
             dir_path = root_path / dir
             _set_folder_permission(dir_path)
-
-
 def _get_mtime(year: int, month: int, day: int) -> float:
     """Get the mtime of a given date at midnight UTC."""
     date = datetime.datetime(year, month, day, tzinfo=datetime.UTC)
     return time.mktime(date.timetuple())
-
-
-# Map of relative paths, defined as regular expressions, to expiration timestamps (mtime format).
-# Partial matching will be used from top to bottom and the first match will be chosen.
-# Cached entries will be retained only if they are newer than the expiration timestamp.
 _INVALIDATE_CACHE_DIRS: dict[re.Pattern, float] = {
     re.compile("openpi-assets/checkpoints/pi0_aloha_pen_uncap"): _get_mtime(2025, 2, 17),
     re.compile("openpi-assets/checkpoints/pi0_libero"): _get_mtime(2025, 2, 6),
     re.compile("openpi-assets/checkpoints/"): _get_mtime(2025, 2, 3),
 }
-
-
 def _should_invalidate_cache(cache_dir: pathlib.Path, local_path: pathlib.Path) -> bool:
     """Invalidate the cache if it is expired. Return True if the cache was invalidated."""
 
@@ -188,7 +163,6 @@ def _should_invalidate_cache(cache_dir: pathlib.Path, local_path: pathlib.Path) 
     relative_path = str(local_path.relative_to(cache_dir))
     for pattern, expire_time in _INVALIDATE_CACHE_DIRS.items():
         if pattern.match(relative_path):
-            # Remove if not newer than the expiration timestamp.
             return local_path.stat().st_mtime <= expire_time
 
     return False

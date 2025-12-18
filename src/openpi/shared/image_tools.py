@@ -6,8 +6,6 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 
 import openpi.shared.array_typing as at
-
-
 @functools.partial(jax.jit, static_argnums=(1, 2, 3))
 @at.typecheck
 def resize_with_pad(
@@ -30,7 +28,6 @@ def resize_with_pad(
         images, (images.shape[0], resized_height, resized_width, images.shape[3]), method=method
     )
     if images.dtype == jnp.uint8:
-        # round from float back to uint8
         resized_images = jnp.round(resized_images).clip(0, 255).astype(jnp.uint8)
     elif images.dtype == jnp.float32:
         resized_images = resized_images.clip(-1.0, 1.0)
@@ -50,8 +47,6 @@ def resize_with_pad(
     if not has_batch_dim:
         padded_images = padded_images[0]
     return padded_images
-
-
 def resize_with_pad_torch(
     images: torch.Tensor,
     height: int,
@@ -70,10 +65,8 @@ def resize_with_pad_torch(
     Returns:
         Resized and padded tensor with same shape format as input
     """
-    # Check if input is in channels-last format [*b, h, w, c] or channels-first [*b, c, h, w]
     if images.shape[-1] <= 4:  # Assume channels-last format
         channels_last = True
-        # Convert to channels-first for torch operations
         if images.dim() == 3:
             images = images.unsqueeze(0)  # Add batch dimension
         images = images.permute(0, 3, 1, 2)  # [b, h, w, c] -> [b, c, h, w]

@@ -10,8 +10,6 @@ import jax
 
 P = ParamSpec("P")
 R = TypeVar("R")
-
-
 def module_jit(meth: Callable[P, R], *jit_args, **jit_kwargs) -> Callable[P, R]:
     """A higher-order function to JIT-compile `nnx.Module` methods, freezing the module's state in the process.
 
@@ -41,8 +39,6 @@ def module_jit(meth: Callable[P, R], *jit_args, **jit_kwargs) -> Callable[P, R]:
         return jitted_fn(state, *args, **kwargs)
 
     return wrapper
-
-
 @dataclasses.dataclass(frozen=True)
 class PathRegex:
     """NNX Filter that matches paths using a regex.
@@ -61,8 +57,6 @@ class PathRegex:
         joined_path = self.sep.join(str(x) for x in path)
         assert isinstance(self.pattern, re.Pattern)
         return self.pattern.fullmatch(joined_path) is not None
-
-
 def state_map(state: nnx.State, filter: nnx.filterlib.Filter, fn: Callable[[Any], Any]) -> nnx.State:
     """Apply a function to the leaves of the state that match the filter."""
     filtered_keys = set(state.filter(filter).flat_state())
