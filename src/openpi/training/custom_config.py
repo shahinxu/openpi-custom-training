@@ -13,16 +13,12 @@ from openpi.training import optimizer as _optimizer
 from openpi.training import weight_loaders
 from openpi.transforms import Group as TransformsGroup, RepackTransform
 from openpi.policies import libero_policy
-
-
-# Create a custom data config factory
 @dataclasses.dataclass(frozen=True)
 class LeRobotCustomDataConfig(_config.DataConfigFactory):
     """Configuration for custom segmented dataset."""
     
     @override
     def create(self, assets_dirs: Path, model_config: _model.BaseModelConfig) -> _config.DataConfig:
-        # Repack transform to match dataset keys to inference keys
         repack_transform = TransformsGroup(
             inputs=[
                 RepackTransform({
@@ -33,13 +29,11 @@ class LeRobotCustomDataConfig(_config.DataConfigFactory):
             ]
         )
         
-        # Use similar data transforms as Libero
         data_transforms = TransformsGroup(
             inputs=[libero_policy.LiberoInputs(model_type=model_config.model_type)],
             outputs=[libero_policy.LiberoOutputs()],
         )
         
-        # Model transforms
         model_transforms = _config.ModelTransformFactory()(model_config)
         
         return dataclasses.replace(
@@ -48,13 +42,9 @@ class LeRobotCustomDataConfig(_config.DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
         )
-
-
-# Custom training config
 PI05_CUSTOM_CONFIG = _config.TrainConfig(
     name="pi05_custom",
     
-    # Pi0.5 model with LoRA enabled
     model=pi0_config.Pi0Config(
         pi05=True,
         paligemma_variant="gemma_2b_lora",
@@ -64,16 +54,13 @@ PI05_CUSTOM_CONFIG = _config.TrainConfig(
         discrete_state_input=False,
     ),
     
-    # Dataset configuration
     data=LeRobotCustomDataConfig(
         repo_id="rzh/openpi_segmented_data",
     ),
     
-    # Training hyperparameters
     batch_size=32,
     num_train_steps=10_000,
     
-    # Learning rate schedule
     lr_schedule=_optimizer.CosineDecaySchedule(
         warmup_steps=500,
         peak_lr=3e-4,
@@ -81,18 +68,15 @@ PI05_CUSTOM_CONFIG = _config.TrainConfig(
         decay_lr=1e-5,
     ),
     
-    # Optimizer
     optimizer=_optimizer.AdamW(
         clip_gradient_norm=1.0,
         weight_decay=0.01,
     ),
     
-    # Load pre-trained pi0.5 base weights
     weight_loader=weight_loaders.CheckpointWeightLoader(
         "gs://openpi-assets/checkpoints/pi05_base/params"
     ),
     
-    # LoRA: freeze all parameters except LoRA adapters
     freeze_filter=pi0_config.Pi0Config(
         pi05=True,
         paligemma_variant="gemma_2b_lora",
@@ -101,15 +85,10 @@ PI05_CUSTOM_CONFIG = _config.TrainConfig(
         action_horizon=10,
     ).get_freeze_filter(),
     
-    # Disable EMA for LoRA fine-tuning
     ema_decay=None,
     
-    # Checkpoint and logging
     log_interval=50,
     save_interval=1000,
     keep_period=5000,
 )
-
-
-# Register the config
 _config._CONFIGS.append(PI05_CUSTOM_CONFIG)

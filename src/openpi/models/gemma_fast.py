@@ -1,16 +1,6 @@
-# Copyright 2024 Big Vision Authors.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 """
 Gemma model implementation from big_vision/models/ppp/gemma.py (with small modifications for NNX compatibility)
@@ -30,8 +20,6 @@ import openpi.models.lora as lora
 import openpi.shared.array_typing as at
 
 Variant = Literal["gemma_2b", "gemma_2b_lora"]
-
-
 def get_config(variant):
     """Returns config for specified gemma variant."""
     if variant == "gemma_2b":
@@ -71,8 +59,6 @@ def get_config(variant):
             }
         )
     raise ValueError(f"Unknown variant: {variant}")
-
-
 @at.typecheck
 class Einsum(nn.Module):
     shape: tuple[int, ...]
@@ -82,8 +68,6 @@ class Einsum(nn.Module):
         dtype = x.dtype  # original dtype, could be half-precision
         w = self.param("w", nn.initializers.zeros_init(), self.shape).astype(dtype)
         return jnp.einsum(eqn, x, w)
-
-
 @at.typecheck
 class RMSNorm(nn.Module):
     @nn.compact
@@ -96,8 +80,6 @@ class RMSNorm(nn.Module):
             1 + scale
         )  # scale by learned parameter in float32 (matches Flax implementation)
         return normed_inputs.astype(dtype)  # return in original dtype
-
-
 @at.typecheck
 class Embedder(nn.Module):
     """Embedder module."""
@@ -119,8 +101,6 @@ class Embedder(nn.Module):
 
     def decode(self, x):
         return jnp.dot(x, self.input_embedding_table.T)
-
-
 @at.typecheck
 class Attention(nn.Module):
     """Attention module."""
@@ -222,8 +202,6 @@ class Attention(nn.Module):
         encoded = jnp.einsum("BKGTS,BSKH->BTKGH", probs, v)
         encoded = einops.rearrange(encoded, "B T K G H -> B T (K G) H")
         return self.attn_vec_einsum("BTNH,NHD->BTD", encoded), kv_cache
-
-
 @at.typecheck
 class Block(nn.Module):
     """Transformer block."""
@@ -270,11 +248,7 @@ class Block(nn.Module):
         outputs = self.drop(outputs, deterministic)
         outputs = residual + outputs
         return outputs, kv_cache
-
-
 KVCache: TypeAlias = tuple[at.Int[at.Array, " b"], at.Float[at.Array, "b _t _k _h"], at.Float[at.Array, "b _t _v _h"]]
-
-
 @at.typecheck
 class Module(nn.Module):
     """gemma model."""
@@ -420,8 +394,6 @@ class Module(nn.Module):
     def init(self):
         """Convenience method for initializing all parameters, necessary due to the quirks of linen."""
         self(jnp.zeros((1, 1), dtype=jnp.int32))
-
-
 def _apply_rope(x, *, positions, max_wavelength=10_000):
     """Applies RoPE positions [B, L] to x [B, L, H, D]."""
     freq_exponents = (2.0 / x.shape[-1]) * jnp.arange(x.shape[-1] // 2, dtype=jnp.float32)
@@ -429,7 +401,6 @@ def _apply_rope(x, *, positions, max_wavelength=10_000):
     radians = positions[..., None] / timescale[None, None, :]
     radians = radians[..., None, :]
     assert radians.dtype == jnp.float32
-    # radians.shape = [...,L,1,d=D/2]
     sin, cos = jnp.sin(radians), jnp.cos(radians)
     x1, x2 = jnp.split(x, 2, axis=-1)
     res = jnp.concatenate([x1 * cos - x2 * sin, x2 * cos + x1 * sin], axis=-1)

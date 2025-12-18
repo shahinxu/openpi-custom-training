@@ -17,8 +17,6 @@ from openpi.training.droid_rlds_dataset import DroidRldsDataset
 import openpi.transforms as _transforms
 
 T_co = TypeVar("T_co", covariant=True)
-
-
 class Dataset(Protocol[T_co]):
     """Interface for a dataset with random access."""
 
@@ -27,8 +25,6 @@ class Dataset(Protocol[T_co]):
 
     def __len__(self) -> int:
         raise NotImplementedError("Subclasses of Dataset should implement __len__.")
-
-
 class IterableDataset(Protocol[T_co]):
     """Interface for an iterable dataset."""
 
@@ -37,8 +33,6 @@ class IterableDataset(Protocol[T_co]):
 
     def __len__(self) -> int:
         raise NotImplementedError("Subclasses of Dataset should implement __len__.")
-
-
 class DataLoader(Protocol[T_co]):
     """Interface for a data loader."""
 
@@ -48,8 +42,6 @@ class DataLoader(Protocol[T_co]):
 
     def __iter__(self) -> Iterator[T_co]:
         raise NotImplementedError("Subclasses of DataLoader should implement __iter__.")
-
-
 class TransformedDataset(Dataset[T_co]):
     def __init__(self, dataset: Dataset, transforms: Sequence[_transforms.DataTransformFn]):
         self._dataset = dataset
@@ -60,8 +52,6 @@ class TransformedDataset(Dataset[T_co]):
 
     def __len__(self) -> int:
         return len(self._dataset)
-
-
 class IterableTransformedDataset(IterableDataset[T_co]):
     def __init__(
         self,
@@ -77,8 +67,6 @@ class IterableTransformedDataset(IterableDataset[T_co]):
     def __iter__(self):
         for sample in self._dataset:
             if self._is_batched:
-                # Transforms are designed to be applied to individual samples. So we need to split the batch into
-                # individual samples and apply the transform to each sample individually.
                 batch_size = next(v.shape[0] for v in sample.values())
 
                 # Split batch into individual samples using tree_map
@@ -94,8 +82,6 @@ class IterableTransformedDataset(IterableDataset[T_co]):
 
     def __len__(self) -> int:
         return len(self._dataset)
-
-
 class FakeDataset(Dataset):
     def __init__(self, model_config: _model.BaseModelConfig, num_samples: int):
         self._num_samples = num_samples
@@ -107,7 +93,6 @@ class FakeDataset(Dataset):
         def make_from_spec(spec: jax.ShapeDtypeStruct):
             nonlocal rng
             rng, data_rng = jax.random.split(rng)
-            # Remove the batch dimension.
             shape = spec.shape[1:]
             if spec.dtype == jnp.float32:
                 return jax.random.uniform(data_rng, shape=shape, minval=-1.0, maxval=1.0)
@@ -125,8 +110,6 @@ class FakeDataset(Dataset):
 
     def __len__(self) -> int:
         return self._num_samples
-
-
 def create_torch_dataset(
     data_config: _config.DataConfig, action_horizon: int, model_config: _model.BaseModelConfig
 ) -> Dataset:
@@ -150,8 +133,6 @@ def create_torch_dataset(
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
 
     return dataset
-
-
 def create_rlds_dataset(
     data_config: _config.DataConfig,
     action_horizon: int,
@@ -159,7 +140,6 @@ def create_rlds_dataset(
     *,
     shuffle: bool = False,
 ) -> Dataset:
-    # At the moment, we only support DROID for RLDS datasets.
     return DroidRldsDataset(
         data_dir=data_config.rlds_data_dir,
         batch_size=batch_size,
@@ -168,8 +148,6 @@ def create_rlds_dataset(
         action_space=data_config.action_space,
         filter_dict_path=data_config.filter_dict_path,
     )
-
-
 def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
@@ -190,8 +168,6 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
             *data_config.model_transforms.inputs,
         ],
     )
-
-
 def transform_iterable_dataset(
     dataset: IterableDataset,
     data_config: _config.DataConfig,
@@ -219,8 +195,6 @@ def transform_iterable_dataset(
         ],
         is_batched=is_batched,
     )
-
-
 def create_data_loader(
     config: _config.TrainConfig,
     *,
@@ -267,8 +241,6 @@ def create_data_loader(
         skip_norm_stats=skip_norm_stats,
         framework=framework,
     )
-
-
 def create_torch_data_loader(
     data_config: _config.DataConfig,
     model_config: _model.BaseModelConfig,
@@ -304,8 +276,6 @@ def create_torch_data_loader(
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
 
     # Use TorchDataLoader for both frameworks
-    # For PyTorch DDP, create DistributedSampler and divide batch size by world size
-    # For JAX, divide by process count
     sampler = None
     if framework == "pytorch":
         if torch.distributed.is_initialized():
@@ -336,8 +306,6 @@ def create_torch_data_loader(
     )
 
     return DataLoaderImpl(data_config, data_loader)
-
-
 def create_rlds_data_loader(
     data_config: _config.DataConfig,
     action_horizon: int,
@@ -377,8 +345,6 @@ def create_rlds_data_loader(
     )
 
     return DataLoaderImpl(data_config, data_loader)
-
-
 class TorchDataLoader:
     """Torch data loader implementation."""
 
@@ -419,7 +385,6 @@ class TorchDataLoader:
         # Store sharding - None for PyTorch, JAX sharding for JAX
         self._sharding = sharding
         if sharding is None and framework == "jax":
-            # Use data parallel sharding by default for JAX only.
             self._sharding = jax.sharding.NamedSharding(
                 jax.sharding.Mesh(jax.devices(), ("B",)),
                 jax.sharding.PartitionSpec("B"),
@@ -462,28 +427,17 @@ class TorchDataLoader:
                 except StopIteration:
                     break  # We've exhausted the dataset. Create a new iterator and start over.
                 num_items += 1
-                # For JAX, convert to sharded arrays; for PyTorch, return torch tensors
                 if self._sharding is not None:
                     yield jax.tree.map(lambda x: jax.make_array_from_process_local_data(self._sharding, x), batch)
                 else:
                     yield jax.tree.map(torch.as_tensor, batch)
-
-
 def _collate_fn(items):
     """Collate the batch elements into batched numpy arrays."""
-    # Make sure to convert to numpy arrays before stacking since some of the incoming elements
-    # may be JAX arrays.
     return jax.tree.map(lambda *xs: np.stack([np.asarray(x) for x in xs], axis=0), *items)
-
-
 def _worker_init_fn(worker_id: int) -> None:
     """Tell JAX inside the worker process not to preallocate the GPU memory."""
-    # NOTE: This is called after jax is imported inside the worker process. This
-    # means that this approach will not work for selecting the backend.
     os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
     os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
-
-
 class RLDSDataLoader:
     """Shallow wrapper around the DROID data loader to make it compatible with openpi.
 
@@ -504,7 +458,6 @@ class RLDSDataLoader:
             raise NotImplementedError("Data loading with multiple processes is not supported.")
 
         if sharding is None:
-            # Use data parallel sharding by default.
             sharding = jax.sharding.NamedSharding(
                 jax.sharding.Mesh(jax.devices(), ("B",)),
                 jax.sharding.PartitionSpec("B"),
@@ -526,8 +479,6 @@ class RLDSDataLoader:
                     break  # We've exhausted the dataset. Create a new iterator and start over.
                 num_items += 1
                 yield jax.tree.map(lambda x: jax.make_array_from_process_local_data(self._sharding, x), batch)
-
-
 class DataLoaderImpl(DataLoader):
     def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader | RLDSDataLoader):
         self._data_config = data_config

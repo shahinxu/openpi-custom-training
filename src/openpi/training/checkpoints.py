@@ -15,8 +15,6 @@ from openpi.shared import array_typing as at
 import openpi.shared.normalize as _normalize
 import openpi.training.data_loader as _data_loader
 import openpi.training.utils as training_utils
-
-
 def initialize_checkpoint_dir(
     checkpoint_dir: epath.Path | str, *, keep_period: int | None, overwrite: bool, resume: bool
 ) -> tuple[ocp.CheckpointManager, bool]:
@@ -53,15 +51,11 @@ def initialize_checkpoint_dir(
     )
 
     # Special case: the checkpoint directory exists and the user requests to resume training, but the training run did
-    # not get to the first checkpoint saved. In this case, we don't actually want the train script to try and restore a
-    # checkpoint, since it will fail.
     if resuming and tuple(mngr.all_steps()) in [(), (0,)]:
         logging.info("Checkpoint directory exists, but does not contain any checkpoints. Aborting resume.")
         resuming = False
 
     return mngr, resuming
-
-
 def save_state(
     checkpoint_manager: ocp.CheckpointManager,
     state: training_utils.TrainState,
@@ -69,7 +63,6 @@ def save_state(
     step: int,
 ):
     def save_assets(directory: epath.Path):
-        # Save the normalization stats.
         data_config = data_loader.data_config()
         norm_stats = data_config.norm_stats
         if norm_stats is not None and data_config.asset_id is not None:
@@ -84,8 +77,6 @@ def save_state(
         "params": {"params": params},
     }
     checkpoint_manager.save(step, items)
-
-
 def restore_state(
     checkpoint_manager: ocp.CheckpointManager,
     state: training_utils.TrainState,
@@ -95,7 +86,6 @@ def restore_state(
     del data_loader
 
     with at.disable_typechecking():
-        # Split params that can be used for inference into a separate item.
         train_state, params = _split_params(state)
         restored = checkpoint_manager.restore(
             step,
@@ -105,19 +95,13 @@ def restore_state(
             },
         )
     return _merge_params(restored["train_state"], restored["params"])
-
-
 def load_norm_stats(assets_dir: epath.Path | str, asset_id: str) -> dict[str, _normalize.NormStats] | None:
     norm_stats_dir = epath.Path(assets_dir) / asset_id
     norm_stats = _normalize.load(norm_stats_dir)
     logging.info(f"Loaded norm stats from {norm_stats_dir}")
     return norm_stats
-
-
 class Callback(Protocol):
     def __call__(self, directory: epath.Path) -> None: ...
-
-
 class CallbackHandler(ocp.AsyncCheckpointHandler):
     """A CheckpointHandler for calling an arbitrary function asynchronously. Only for saving, not for restoring."""
 
@@ -130,18 +114,12 @@ class CallbackHandler(ocp.AsyncCheckpointHandler):
 
     def restore(self, *args, **kwargs):
         raise NotImplementedError("CallbackHandler does not support restore")
-
-
 @ocp.args.register_with_handler(CallbackHandler, for_save=True)
 @dataclasses.dataclass
 class CallbackSave(ocp.args.CheckpointArgs):
     callback: Callback
-
-
 @ocp.args.register_with_handler(CallbackHandler, for_restore=True)
 class CallbackRestore(ocp.args.CheckpointArgs): ...
-
-
 def _split_params(state: training_utils.TrainState) -> tuple[training_utils.TrainState, at.Params]:
     if state.ema_params is not None:
         params = state.ema_params
@@ -150,10 +128,7 @@ def _split_params(state: training_utils.TrainState) -> tuple[training_utils.Trai
         params = state.params
         train_state = dataclasses.replace(state, params={})
     return train_state, params
-
-
 def _merge_params(train_state: training_utils.TrainState, params: dict[str, at.Params]) -> training_utils.TrainState:
-    # Revert the logic inside `_split_params`. Assumes that existence of `params` means that EMA params were used during the split.
     if train_state.params:
         return dataclasses.replace(train_state, ema_params=params["params"])
     return dataclasses.replace(train_state, params=params["params"])

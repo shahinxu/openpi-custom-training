@@ -21,7 +21,6 @@ import openpi.shared.nnx_utils as nnx_utils
 import openpi.training.checkpoints as _checkpoints
 import openpi.training.config as _config
 import openpi.training.data_loader as _data_loader
-import openpi.training.evaluation as evaluation
 import openpi.training.optimizer as _optimizer
 import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
@@ -29,22 +28,7 @@ import openpi.training.weight_loaders as _weight_loaders
 
 
 def init_logging():
-    """Custom logging format for better readability."""
-    level_mapping = {"DEBUG": "D", "INFO": "I", "WARNING": "W", "ERROR": "E", "CRITICAL": "C"}
-
-    class CustomFormatter(logging.Formatter):
-        def format(self, record):
-            record.levelname = level_mapping.get(record.levelname, record.levelname)
-            return super().format(record)
-
-    formatter = CustomFormatter(
-        fmt="%(asctime)s.%(msecs)03d [%(levelname)s] %(message)-80s (%(process)d:%(filename)s:%(lineno)s)",
-        datefmt="%H:%M:%S",
-    )
-
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    logger.handlers[0].setFormatter(formatter)
+    logging.basicConfig(level=logging.WARNING, format='%(message)s')
 
 
 def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = False, enabled: bool = True):
@@ -70,12 +54,229 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
         wandb.run.log_code(epath.Path(__file__).parent.parent)
 
 
+def evaluate_on_test_set(
+    train_state: training_utils.TrainState,
+    config: _config.TrainConfig,
+    step: int,
+    checkpoint_dir: epath.Path,
+    mesh: jax.sharding.Mesh,
+    rng: at.KeyArrayLike,
+    data_loader: _data_loader.DataLoader,
+) -> dict[str, float]:
+    """Evaluate model on test set. Compute MSE for overall test set and per-episode."""
+    import json
+    import csv
+    from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+    
+    try:
+        eval_dir = checkpoint_dir / "eval_results"
+        eval_dir.mkdir(parents=True, exist_ok=True)
+        info_path = epath.Path(config.data.local_dir) / "meta" / "info.json"
+        with open(info_path) as f:
+            info = json.load(f)
+        
+        train_split = info["splits"]["train"]
+        train_start, train_end = map(int, train_split.split(":"))
+        total_episodes = info["total_episodes"]
+        test_episode_indices = list(range(train_end, total_episodes))
+        
+        logging.info(f"Test episodes: {train_end}-{total_episodes-1} ({len(test_episode_indices)} episodes)")
+        
+        model = nnx.merge(train_state.model_def, train_state.params)
+        
+        dataset = LeRobotDataset(
+            repo_id=config.data.repo_id,
+            root=config.data.local_dir,
+        )
+        
+        logging.info("Grouping test data by episode...")
+        episode_frames = {}
+        for idx in range(len(dataset)):
+            sample = dataset[idx]
+            ep_idx = int(sample['episode_index'].item() if hasattr(sample['episode_index'], 'item') else sample['episode_index'])
+            if ep_idx not in test_episode_indices:
+                continue
+            if ep_idx not in episode_frames:
+                episode_frames[ep_idx] = []
+            episode_frames[ep_idx].append(idx)
+        
+        logging.info(f"Found {len(episode_frames)} test episodes")
+        
+        episode_data = {}
+        for ep_idx in sorted(episode_frames.keys()):
+            episode_data[ep_idx] = {
+                'episode_index': ep_idx,
+                'mses': [],
+                'num_frames': len(episode_frames[ep_idx]),
+            }
+        
+        logging.info("Creating transformed dataset for evaluation...")
+        from openpi.training.data_loader import transform_dataset, create_torch_dataset
+        
+        torch_dataset = create_torch_dataset(
+            config.data.create(config.assets_dirs, config.model),
+            action_horizon=config.model.action_horizon,
+            model_config=config.model
+        )
+        
+        transformed_dataset = transform_dataset(
+            torch_dataset,
+            config.data.create(config.assets_dirs, config.model),
+            skip_norm_stats=False
+        )
+        
+        import torch
+        for ep_idx in sorted(episode_frames.keys()):
+            frame_indices = episode_frames[ep_idx]
+            
+            batch_size = 8
+            for i in range(0, len(frame_indices), batch_size):
+                batch_frame_indices = frame_indices[i:i+batch_size]
+                
+                batch_samples = [transformed_dataset[idx] for idx in batch_frame_indices]
+                
+                batch_obs_dict = {}
+                batch_actions_gt = []
+                
+                for sample in batch_samples:
+                    batch_actions_gt.append(sample['actions'])
+                    
+                    for key, value in sample.items():
+                        if key != 'actions':
+                            if key not in batch_obs_dict:
+                                batch_obs_dict[key] = []
+                            batch_obs_dict[key].append(value)
+                
+                def stack_nested(values):
+                    """Recursively stack values that might be nested dicts or tensors."""
+                    if not values:
+                        return None
+                    first = values[0]
+                    if isinstance(first, dict):
+                        return {k: stack_nested([v[k] for v in values]) for k in first.keys()}
+                    elif isinstance(first, torch.Tensor):
+                        return torch.stack(values)
+                    else:
+                        tensor_values = []
+                        for x in values:
+                            if isinstance(x, torch.Tensor):
+                                tensor_values.append(x)
+                            elif isinstance(x, (np.ndarray, np.generic)):
+                                tensor_values.append(torch.from_numpy(np.asarray(x)))
+                            else:
+                                tensor_values.append(torch.tensor(x))
+                        return torch.stack(tensor_values)
+                
+                for key in batch_obs_dict:
+                    batch_obs_dict[key] = stack_nested(batch_obs_dict[key])
+                
+                batch_actions_gt = torch.stack([
+                    torch.tensor(x) if not isinstance(x, torch.Tensor) else x 
+                    for x in batch_actions_gt
+                ])
+                
+                batch_obs_jax = jax.tree.map(
+                    lambda x: jnp.array(x.numpy()) if isinstance(x, torch.Tensor) else jnp.array(x),
+                    batch_obs_dict
+                )
+                
+                from openpi.models import model as model_lib
+                batch_obs_model = model_lib.Observation.from_dict(batch_obs_jax)
+                
+                with sharding.set_mesh(mesh):
+                    pred_rng = jax.random.fold_in(rng, ep_idx * 100000 + i)
+                    actions_pred = model.sample_actions(pred_rng, batch_obs_model)
+                
+                actions_pred_np = np.array(jax.device_get(actions_pred))
+                actions_gt_np = batch_actions_gt.numpy()
+                
+                for j in range(len(batch_samples)):
+                    pred = actions_pred_np[j]
+                    gt = actions_gt_np[j]
+                    
+                    mse = float(np.mean((pred - gt) ** 2))
+                    episode_data[ep_idx]['mses'].append(mse)
+                
+                jax.clear_caches()
+        
+        for ep_idx, ep_data in episode_data.items():
+            if ep_data['mses']:
+                ep_data['mse'] = float(np.mean(ep_data['mses']))
+                ep_data['num_frames'] = len(ep_data['mses'])
+            else:
+                ep_data['mse'] = 0.0
+                ep_data['num_frames'] = 0
+        
+        all_mses = []
+        for ep_data in episode_data.values():
+            all_mses.extend(ep_data['mses'])
+        overall_mse = float(np.mean(all_mses)) if all_mses else 0.0
+        
+        logging.info(f"Evaluation complete: Overall MSE = {overall_mse:.6f}")
+        
+        eval_summary = {
+            "step": step,
+            "overall_mse": overall_mse,
+            "num_episodes": len(episode_data),
+            "num_frames": len(all_mses),
+            "per_episode_results": [
+                {
+                    'episode_index': ep_idx,
+                    'num_frames': ep_data['num_frames'],
+                    'mse': ep_data['mse'],
+
+                }
+                for ep_idx, ep_data in sorted(episode_data.items())
+            ]
+        }
+        
+        eval_file = eval_dir / f"eval_step_{step:06d}.json"
+        with open(eval_file, "w") as f:
+            json.dump(eval_summary, f, indent=2)
+        
+        csv_file = eval_dir / f"eval_step_{step:06d}_per_episode.csv"
+        with open(csv_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["episode_index", "num_frames", "mse"])
+            writer.writeheader()
+            for ep_idx, ep_data in sorted(episode_data.items()):
+                writer.writerow({
+                    "episode_index": ep_idx,
+                    "num_frames": ep_data['num_frames'],
+                    "mse": f"{ep_data['mse']:.6f}",
+                })
+        
+        summary_csv = eval_dir / "evaluation_summary.csv"
+        file_exists = summary_csv.exists()
+        with open(summary_csv, "a", newline="") as f:
+            fieldnames = ["step", "overall_mse", "num_episodes", "num_frames"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow({
+                "step": step,
+                "overall_mse": f"{overall_mse:.6f}",
+                "num_episodes": len(episode_data),
+                "num_frames": len(all_mses),
+            })
+        
+        print(f"Step {step}: Test MSE = {overall_mse:.6f}")
+        
+        return {
+            "test/mse": overall_mse,
+            "test/num_episodes": len(episode_data),
+            "test/num_frames": len(all_mses),
+        }
+        
+    except Exception as e:
+        print(f"Eval failed: {e}")
+        return {}
+
+
 def _load_weights_and_validate(loader: _weight_loaders.WeightLoader, params_shape: at.Params) -> at.Params:
     """Loads and validates the weights. Returns a loaded subset of the weights."""
     loaded_params = loader.load(params_shape)
     at.check_pytree_equality(expected=params_shape, got=loaded_params, check_shapes=True, check_dtypes=True)
 
-    # Remove jax.ShapeDtypeStruct from the loaded params. This makes sure that only the loaded params are returned.
     return traverse_util.unflatten_dict(
         {k: v for k, v in traverse_util.flatten_dict(loaded_params).items() if not isinstance(v, jax.ShapeDtypeStruct)}
     )
@@ -89,18 +290,14 @@ def init_train_state(
 
     def init(rng: at.KeyArrayLike, partial_params: at.Params | None = None) -> training_utils.TrainState:
         rng, model_rng = jax.random.split(rng)
-        # initialize the model (and its parameters).
         model = config.model.create(model_rng)
 
-        # Merge the partial params into the model.
         if partial_params is not None:
             graphdef, state = nnx.split(model)
-            # This will produce an error if the partial params are not a subset of the state.
             state.replace_by_pure_dict(partial_params)
             model = nnx.merge(graphdef, state)
 
         params = nnx.state(model)
-        # Convert frozen params to bfloat16.
         params = nnx_utils.state_map(params, config.freeze_filter, lambda p: p.replace(p.value.astype(jnp.bfloat16)))
 
         return training_utils.TrainState(
@@ -122,7 +319,6 @@ def init_train_state(
     partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict())
     replicated_sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
 
-    # Initialize the train state and mix in the partial params.
     train_state = jax.jit(
         init,
         donate_argnums=(1,),  # donate the partial params buffer.
@@ -153,7 +349,6 @@ def train_step(
     train_rng = jax.random.fold_in(rng, state.step)
     observation, actions = batch
 
-    # Filter out frozen params.
     diff_state = nnx.DiffState(0, config.trainable_filter)
     loss, grads = nnx.value_and_grad(loss_fn, argnums=diff_state)(model, train_rng, observation, actions)
 
@@ -161,7 +356,6 @@ def train_step(
     updates, new_opt_state = state.tx.update(grads, state.opt_state, params)
     new_params = optax.apply_updates(params, updates)
 
-    # Update the model in place and return the new full state.
     nnx.update(model, new_params)
     new_params = nnx.state(model)
 
@@ -174,7 +368,6 @@ def train_step(
             ),
         )
 
-    # Filter out params that aren't kernels.
     kernel_params = nnx.state(
         model,
         nnx.All(
@@ -193,7 +386,6 @@ def train_step(
 
 def main(config: _config.TrainConfig):
     init_logging()
-    logging.info(f"Running on: {platform.node()}")
 
     if config.batch_size % jax.device_count() != 0:
         raise ValueError(
@@ -224,9 +416,7 @@ def main(config: _config.TrainConfig):
     )
     data_iter = iter(data_loader)
     batch = next(data_iter)
-    logging.info(f"Initialized data loader:\n{training_utils.array_tree_to_info(batch)}")
 
-    # Log images from first batch to sanity check.
     images_to_log = [
         wandb.Image(np.concatenate([np.array(img[i]) for img in batch[0].images.values()], axis=1))
         for i in range(min(5, len(next(iter(batch[0].images.values())))))
@@ -269,35 +459,28 @@ def main(config: _config.TrainConfig):
             infos = []
         batch = next(data_iter)
 
-        # Save checkpoint and evaluate at: every save_interval steps, step 1, and final step
-        should_save = (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1 or step == 1
-        if should_save:
+        if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
             _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
-            
-            # Run evaluation on test set (including step 1 for early performance check)
-            if step > 0:
-                try:
-                    eval_metrics = evaluation.evaluate_on_test_set(
-                        train_state=train_state,
-                        config=config,
-                        step=step,
-                        checkpoint_dir=checkpoint_manager.directory,
-                        mesh=mesh,
-                        rng=train_rng,
-                        data_loader=data_loader,
-                    )
-                    
-                    # Log to wandb with eval/ prefix
-                    if eval_metrics:
-                        wandb_eval_metrics = {f"eval/{k}": v for k, v in eval_metrics.items()}
-                        wandb.log(wandb_eval_metrics, step=step)
-                except Exception as e:
-                    logging.error(f"Evaluation failed: {e}")
-                    import traceback
-                    traceback.print_exc()
-
-    logging.info("Waiting for checkpoint manager to finish")
-    checkpoint_manager.wait_until_finished()
+        
+        if step % 100 == 0 and step > 0:
+            try:
+                eval_metrics = evaluate_on_test_set(
+                    train_state=train_state,
+                    config=config,
+                    step=step,
+                    checkpoint_dir=checkpoint_manager.directory,
+                    mesh=mesh,
+                    rng=train_rng,
+                    data_loader=data_loader,
+                )
+                
+                if eval_metrics:
+                    wandb_eval_metrics = {f"eval/{k}": v for k, v in eval_metrics.items()}
+                    wandb.log(wandb_eval_metrics, step=step)
+            except Exception as e:
+                logging.error(f"Evaluation failed: {e}")
+                import traceback
+                traceback.print_exc()
 
 
 if __name__ == "__main__":

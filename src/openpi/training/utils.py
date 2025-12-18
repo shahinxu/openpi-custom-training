@@ -8,8 +8,6 @@ import optax
 
 from openpi.models import model as _model
 from openpi.shared import array_typing as at
-
-
 @at.typecheck
 @struct.dataclass
 class TrainState:
@@ -21,8 +19,6 @@ class TrainState:
 
     ema_decay: float | None = struct.field(pytree_node=False)
     ema_params: nnx.State | None = None
-
-
 @at.typecheck
 def tree_to_info(tree: at.PyTree, interp_func: Callable[[Any], str] = str) -> str:
     """Converts a PyTree into a human-readable string for logging. Optionally, `interp_func` can be provided to convert
@@ -30,8 +26,6 @@ def tree_to_info(tree: at.PyTree, interp_func: Callable[[Any], str] = str) -> st
     """
     tree, _ = jax.tree_util.tree_flatten_with_path(tree)
     return "\n".join(f"{jax.tree_util.keystr(path)}: {interp_func(value)}" for path, value in tree)
-
-
 @at.typecheck
 def array_tree_to_info(tree: at.PyTree) -> str:
     """Converts a PyTree of arrays into a human-readable string for logging."""

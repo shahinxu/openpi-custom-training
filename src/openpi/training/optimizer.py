@@ -5,13 +5,9 @@ import jax.numpy as jnp
 import optax
 
 import openpi.shared.array_typing as at
-
-
 @runtime_checkable
 class LRScheduleConfig(Protocol):
     def create(self) -> optax.Schedule: ...
-
-
 @dataclasses.dataclass(frozen=True)
 class CosineDecaySchedule(LRScheduleConfig):
     """Cosine decay schedule with warmup."""
@@ -29,8 +25,6 @@ class CosineDecaySchedule(LRScheduleConfig):
             decay_steps=self.decay_steps,
             end_value=self.decay_lr,
         )
-
-
 @dataclasses.dataclass(frozen=True)
 class RsqrtDecaySchedule(LRScheduleConfig):
     """Inverse square root decay schedule with warmup."""
@@ -51,8 +45,6 @@ class RsqrtDecaySchedule(LRScheduleConfig):
             ],
             [self.warmup_steps],
         )
-
-
 @runtime_checkable
 class OptimizerConfig(Protocol):
     def create(
@@ -60,8 +52,6 @@ class OptimizerConfig(Protocol):
         lr: optax.ScalarOrSchedule,
         weight_decay_mask: at.PyTree | None = None,
     ) -> optax.GradientTransformation: ...
-
-
 @dataclasses.dataclass(frozen=True)
 class AdamW(OptimizerConfig):
     """AdamW optimizer."""
@@ -69,7 +59,6 @@ class AdamW(OptimizerConfig):
     b1: float = 0.9
     b2: float = 0.95
     eps: float = 1e-8
-    # Changing this to 0 can cause out-of-memory errors for some reason, so we set it to a negligible value.
     weight_decay: float = 1e-10
     clip_gradient_norm: float = 1.0
 
@@ -83,8 +72,6 @@ class AdamW(OptimizerConfig):
         )
 
         return optax.chain(optax.clip_by_global_norm(self.clip_gradient_norm), tx)
-
-
 @dataclasses.dataclass(frozen=True)
 class SGD(OptimizerConfig):
     """SGD optimizer."""
@@ -100,8 +87,6 @@ class SGD(OptimizerConfig):
     ) -> optax.GradientTransformation:
         assert weight_decay_mask is None, "Weight decay is not supported for SGD"
         return optax.sgd(lr, momentum=self.momentum, nesterov=self.nesterov)
-
-
 def create_optimizer(
     optimizer: OptimizerConfig, lr_schedule: LRScheduleConfig, weight_decay_mask: at.PyTree | None = None
 ) -> optax.GradientTransformation:

@@ -14,12 +14,8 @@ from openpi.shared import normalize as _normalize
 
 DataDict: TypeAlias = at.PyTree
 NormStats: TypeAlias = _normalize.NormStats
-
-
 T = TypeVar("T")
 S = TypeVar("S")
-
-
 @runtime_checkable
 class DataTransformFn(Protocol):
     def __call__(self, data: DataDict) -> DataDict:
@@ -34,8 +30,6 @@ class DataTransformFn(Protocol):
         Returns:
             The transformed data. Could be the input `data` that was modified in place, or a new data structure.
         """
-
-
 @dataclasses.dataclass(frozen=True)
 class Group:
     """A group of transforms."""
@@ -57,8 +51,6 @@ class Group:
             A new group with the appended transforms.
         """
         return Group(inputs=(*self.inputs, *inputs), outputs=(*outputs, *self.outputs))
-
-
 @dataclasses.dataclass(frozen=True)
 class CompositeTransform(DataTransformFn):
     """A composite transform that applies a sequence of transforms in order."""
@@ -69,13 +61,9 @@ class CompositeTransform(DataTransformFn):
         for transform in self.transforms:
             data = transform(data)
         return data
-
-
 def compose(transforms: Sequence[DataTransformFn]) -> DataTransformFn:
     """Compose a sequence of transforms into a single transform."""
     return CompositeTransform(transforms)
-
-
 @dataclasses.dataclass(frozen=True)
 class RepackTransform(DataTransformFn):
     """Repacks an input dictionary into a new dictionary.
@@ -99,8 +87,6 @@ class RepackTransform(DataTransformFn):
     def __call__(self, data: DataDict) -> DataDict:
         flat_item = flatten_dict(data)
         return jax.tree.map(lambda k: flat_item[k], self.structure)
-
-
 @dataclasses.dataclass(frozen=True)
 class InjectDefaultPrompt(DataTransformFn):
     prompt: str | None
@@ -109,14 +95,10 @@ class InjectDefaultPrompt(DataTransformFn):
         if self.prompt is not None and "prompt" not in data:
             data["prompt"] = np.asarray(self.prompt)
         return data
-
-
 @dataclasses.dataclass(frozen=True)
 class Normalize(DataTransformFn):
     norm_stats: at.PyTree[NormStats] | None
-    # If true, will use quantile normalization. Otherwise, normal z-score normalization will be used.
     use_quantiles: bool = False
-    # If true, will raise an error if any of the keys in the norm stats are not present in the data.
     strict: bool = False
 
     def __post_init__(self):
@@ -143,12 +125,9 @@ class Normalize(DataTransformFn):
         assert stats.q99 is not None
         q01, q99 = stats.q01[..., : x.shape[-1]], stats.q99[..., : x.shape[-1]]
         return (x - q01) / (q99 - q01 + 1e-6) * 2.0 - 1.0
-
-
 @dataclasses.dataclass(frozen=True)
 class Unnormalize(DataTransformFn):
     norm_stats: at.PyTree[NormStats] | None
-    # If true, will use quantile normalization. Otherwise, normal z-score normalization will be used.
     use_quantiles: bool = False
 
     def __post_init__(self):
@@ -179,8 +158,6 @@ class Unnormalize(DataTransformFn):
         if (dim := q01.shape[-1]) < x.shape[-1]:
             return np.concatenate([(x[..., :dim] + 1.0) / 2.0 * (q99 - q01 + 1e-6) + q01, x[..., dim:]], axis=-1)
         return (x + 1.0) / 2.0 * (q99 - q01 + 1e-6) + q01
-
-
 def _resize_with_pad(image: np.ndarray, height: int, width: int) -> np.ndarray:
     """Resize image with padding to maintain aspect ratio."""
     if image.shape[:2] == (height, width):
@@ -190,8 +167,6 @@ def _resize_with_pad(image: np.ndarray, height: int, width: int) -> np.ndarray:
     new_img = Image.new("RGB", (width, height), (0, 0, 0))
     new_img.paste(pil_img, ((width - pil_img.width) // 2, (height - pil_img.height) // 2))
     return np.array(new_img)
-
-
 @dataclasses.dataclass(frozen=True)
 class ResizeImages(DataTransformFn):
     height: int
@@ -200,8 +175,6 @@ class ResizeImages(DataTransformFn):
     def __call__(self, data: DataDict) -> DataDict:
         data["image"] = {k: _resize_with_pad(v, self.height, self.width) for k, v in data["image"].items()}
         return data
-
-
 @dataclasses.dataclass(frozen=True)
 class SubsampleActions(DataTransformFn):
     stride: int
@@ -209,15 +182,11 @@ class SubsampleActions(DataTransformFn):
     def __call__(self, data: DataDict) -> DataDict:
         data["actions"] = data["actions"][:: self.stride]
         return data
-
-
 @dataclasses.dataclass(frozen=True)
 class DeltaActions(DataTransformFn):
     """Repacks absolute actions into delta action space."""
 
     # Boolean mask for the action dimensions to be repacked into delta action space. Length
-    # can be smaller than the actual number of dimensions. If None, this transform is a no-op.
-    # See `make_bool_mask` for more details.
     mask: Sequence[bool] | None
 
     def __call__(self, data: DataDict) -> DataDict:
@@ -231,15 +200,11 @@ class DeltaActions(DataTransformFn):
         data["actions"] = actions
 
         return data
-
-
 @dataclasses.dataclass(frozen=True)
 class AbsoluteActions(DataTransformFn):
     """Repacks delta actions into absolute action space."""
 
     # Boolean mask for the action dimensions to be repacked into absolute action space. Length
-    # can be smaller than the actual number of dimensions. If None, this transform is a no-op.
-    # See `make_bool_mask` for more details.
     mask: Sequence[bool] | None
 
     def __call__(self, data: DataDict) -> DataDict:
@@ -253,8 +218,6 @@ class AbsoluteActions(DataTransformFn):
         data["actions"] = actions
 
         return data
-
-
 @dataclasses.dataclass(frozen=True)
 class TokenizePrompt(DataTransformFn):
     tokenizer: _tokenizer.PaligemmaTokenizer
@@ -275,8 +238,6 @@ class TokenizePrompt(DataTransformFn):
 
         tokens, token_masks = self.tokenizer.tokenize(prompt, state)
         return {**data, "tokenized_prompt": tokens, "tokenized_prompt_mask": token_masks}
-
-
 @dataclasses.dataclass(frozen=True)
 class TokenizeFASTInputs(DataTransformFn):
     tokenizer: _tokenizer.FASTTokenizer
@@ -297,8 +258,6 @@ class TokenizeFASTInputs(DataTransformFn):
             "token_ar_mask": ar_mask,
             "token_loss_mask": loss_mask,
         }
-
-
 @dataclasses.dataclass(frozen=True)
 class ExtractFASTActions(DataTransformFn):
     tokenizer: _tokenizer.FASTTokenizer
@@ -308,15 +267,12 @@ class ExtractFASTActions(DataTransformFn):
     def __call__(self, data: DataDict) -> DataDict:
         if "actions" not in data:
             return data
-        # Model outputs are saved in "actions", but for FAST models they represent tokens.
         tokens = data.pop("actions")
         actions = self.tokenizer.extract_actions(tokens.astype(np.int32), self.action_horizon, self.action_dim)
         return {
             **data,
             "actions": actions,
         }
-
-
 @dataclasses.dataclass(frozen=True)
 class PromptFromLeRobotTask(DataTransformFn):
     """Extracts a prompt from the current LeRobot dataset task."""
@@ -333,8 +289,6 @@ class PromptFromLeRobotTask(DataTransformFn):
             raise ValueError(f"{task_index=} not found in task mapping: {self.tasks}")
 
         return {**data, "prompt": prompt}
-
-
 @dataclasses.dataclass(frozen=True)
 class PadStatesAndActions(DataTransformFn):
     """Zero-pads states and actions to the model action dimension."""
@@ -346,18 +300,12 @@ class PadStatesAndActions(DataTransformFn):
         if "actions" in data:
             data["actions"] = pad_to_dim(data["actions"], self.model_action_dim, axis=-1)
         return data
-
-
 def flatten_dict(tree: at.PyTree) -> dict:
     """Flatten a nested dictionary. Uses '/' as the separator."""
     return traverse_util.flatten_dict(tree, sep="/")
-
-
 def unflatten_dict(tree: dict) -> at.PyTree:
     """Unflatten a flattened dictionary. Assumes that '/' was used as a separator."""
     return traverse_util.unflatten_dict(tree, sep="/")
-
-
 def transform_dict(patterns: Mapping[str, str | None], tree: at.PyTree) -> at.PyTree:
     """Transform the structure of a nested dictionary using a set of patterns.
 
@@ -394,7 +342,6 @@ def transform_dict(patterns: Mapping[str, str | None], tree: at.PyTree) -> at.Py
                 new_k = pattern.sub(repl, k, count=1) if repl is not None else None
                 break
         else:
-            # Use the original key if no match is found.
             new_k = k
 
         if new_k is not None:
@@ -410,8 +357,6 @@ def transform_dict(patterns: Mapping[str, str | None], tree: at.PyTree) -> at.Py
             raise ValueError(f"Leaf '{name}' aliases a node of '{next_name}'")
 
     return unflatten_dict(output)
-
-
 def apply_tree(
     tree: at.PyTree[T], selector: at.PyTree[S], fn: Callable[[T, S], T], *, strict: bool = False
 ) -> at.PyTree[T]:
@@ -429,8 +374,6 @@ def apply_tree(
                 raise ValueError(f"Selector key {k} not found in tree")
 
     return unflatten_dict({k: transform(k, v) for k, v in tree.items()})
-
-
 def pad_to_dim(x: np.ndarray, target_dim: int, axis: int = -1, value: float = 0.0) -> np.ndarray:
     """Pad an array to the target dimension with zeros along the specified axis."""
     current_dim = x.shape[axis]
@@ -439,8 +382,6 @@ def pad_to_dim(x: np.ndarray, target_dim: int, axis: int = -1, value: float = 0.
         pad_width[axis] = (0, target_dim - current_dim)
         return np.pad(x, pad_width, constant_values=value)
     return x
-
-
 def make_bool_mask(*dims: int) -> tuple[bool, ...]:
     """Make a boolean mask for the given dimensions.
 
@@ -461,8 +402,6 @@ def make_bool_mask(*dims: int) -> tuple[bool, ...]:
         else:
             result.extend([False] * (-dim))
     return tuple(result)
-
-
 def _assert_quantile_stats(norm_stats: at.PyTree[NormStats]) -> None:
     for k, v in flatten_dict(norm_stats).items():
         if v.q01 is None or v.q99 is None:

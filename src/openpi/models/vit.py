@@ -1,17 +1,6 @@
-# Copyright 2024 Google LLC.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""ViT implementation adapted from https://github.com/google-research/vision_transformer/blob/main/vit_jax/models_vit.py."""
 
 from collections.abc import Callable
 from typing import Any
@@ -26,16 +15,12 @@ Array = Any
 PRNGKey = Any
 Shape = tuple[int]
 Dtype = Any
-
-
 class IdentityLayer(nn.Module):
     """Identity layer, convenient for giving a name to an array."""
 
     @nn.compact
     def __call__(self, x):
         return x
-
-
 class AddPositionEmbs(nn.Module):
     """Adds learned positional embeddings to the inputs.
 
@@ -56,13 +41,10 @@ class AddPositionEmbs(nn.Module):
         Returns:
           Output tensor with shape `(bs, timesteps, in_dim)`.
         """
-        # inputs.shape is (batch_size, seq_len, emb_dim).
         assert inputs.ndim == 3, f"Number of dimensions should be 3, but it is: {inputs.ndim}"
         pos_emb_shape = (1, inputs.shape[1], inputs.shape[2])
         pe = self.param("pos_embedding", self.posemb_init, pos_emb_shape, self.param_dtype)
         return inputs + pe
-
-
 class MlpBlock(nn.Module):
     """Transformer MLP / feed-forward block."""
 
@@ -99,8 +81,6 @@ class MlpBlock(nn.Module):
             x
         )
         return nn.Dropout(rate=self.dropout_rate)(output, deterministic=deterministic)
-
-
 class Encoder1DBlock(nn.Module):
     """Transformer encoder layer.
 
@@ -142,7 +122,6 @@ class Encoder1DBlock(nn.Module):
             deterministic=deterministic,
             dropout_rate=self.attention_dropout_rate,
             num_heads=self.num_heads,
-            # why isn't this true by default???
             force_fp32_for_softmax=True,
         )(x, x)
         x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=deterministic)
@@ -155,8 +134,6 @@ class Encoder1DBlock(nn.Module):
         )
 
         return x + y, None
-
-
 class Encoder(nn.Module):
     """Transformer Model Encoder for sequence to sequence translation.
 
@@ -197,7 +174,6 @@ class Encoder(nn.Module):
             x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
 
         x = x.astype(self.dtype)
-        # Input Encoder
         block = nn.remat(Encoder1DBlock, prevent_cse=False, static_argnums=(2,))
         x, _ = nn.scan(
             block,
@@ -214,8 +190,6 @@ class Encoder(nn.Module):
             num_heads=self.num_heads,
         )(x, not train)
         return nn.LayerNorm(name="encoder_norm", dtype=self.dtype)(x)
-
-
 class VisionTransformer(nn.Module):
     """VisionTransformer."""
 
@@ -234,7 +208,6 @@ class VisionTransformer(nn.Module):
     @nn.compact
     def __call__(self, inputs, *, train):
         x = inputs
-        # (Possibly partial) ResNet root.
         if self.resnet is not None:
             width = int(64 * self.resnet.width_factor)
 
