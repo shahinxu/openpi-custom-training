@@ -15,7 +15,10 @@ import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
 import safetensors
-import torch
+try:
+    import torch
+except Exception:  # pragma: no cover - torch optional at runtime
+    torch = None
 
 from openpi.models_pytorch import pi0_pytorch
 from openpi.shared import image_tools
@@ -23,7 +26,7 @@ import openpi.shared.array_typing as at
 
 logger = logging.getLogger("openpi")
 
-ArrayT = TypeVar("ArrayT", bound=jax.Array | torch.Tensor | np.ndarray)
+ArrayT = TypeVar("ArrayT", bound=jax.Array)
 class ModelType(enum.Enum):
 
     PI0 = "pi0"
@@ -68,7 +71,7 @@ class Observation(Generic[ArrayT]):
         for key in data["image"]:
             if data["image"][key].dtype == np.uint8:
                 data["image"][key] = data["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
-            elif hasattr(data["image"][key], "dtype") and data["image"][key].dtype == torch.uint8:
+            elif torch is not None and hasattr(data["image"][key], "dtype") and data["image"][key].dtype == torch.uint8:
                 data["image"][key] = data["image"][key].to(torch.float32).permute(0, 3, 1, 2) / 255.0 * 2.0 - 1.0
         return cls(
             images=data["image"],
@@ -181,6 +184,8 @@ class BaseModelConfig(abc.ABC):
         return nnx.merge(graphdef, state)
 
     def load_pytorch(self, train_config, weight_path: str):
+        if torch is None:
+            raise RuntimeError("PyTorch is not available in this environment.")
         logger.info(f"train_config: {train_config}")
         model = pi0_pytorch.PI0Pytorch(config=train_config.model)
         safetensors.torch.load_model(model, weight_path)

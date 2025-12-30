@@ -146,9 +146,12 @@ def _ensure_permissions(path: pathlib.Path) -> None:
         for dir in dirs:
             dir_path = root_path / dir
             _set_folder_permission(dir_path)
+_UTC = getattr(datetime, "UTC", datetime.timezone.utc)
+
+
 def _get_mtime(year: int, month: int, day: int) -> float:
     """Get the mtime of a given date at midnight UTC."""
-    date = datetime.datetime(year, month, day, tzinfo=datetime.UTC)
+    date = datetime.datetime(year, month, day, tzinfo=_UTC)
     return time.mktime(date.timetuple())
 _INVALIDATE_CACHE_DIRS: dict[re.Pattern, float] = {
     re.compile("openpi-assets/checkpoints/pi0_aloha_pen_uncap"): _get_mtime(2025, 2, 17),

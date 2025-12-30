@@ -91,7 +91,10 @@ class VLACheckpointRunner:
             max_token_len=cfg.max_token_len,
             discrete_state_input=cfg.discrete_state_input,
         )
-        params = model_lib.restore_params(cfg.checkpoint_dir / "train_state")
+        params_path = cfg.checkpoint_dir / "params"
+        if not params_path.exists():
+            params_path = cfg.checkpoint_dir / "train_state"
+        params = model_lib.restore_params(params_path)
         return model_cfg.load(params)
 
     def _load_norm_stats(

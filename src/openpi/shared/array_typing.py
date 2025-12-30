@@ -9,7 +9,10 @@ import jax._src.tree_util as private_tree_util
 import jax.core
 from jaxtyping import ArrayLike
 from jaxtyping import Bool  # noqa: F401
-from jaxtyping import DTypeLike  # noqa: F401
+try:
+    from jaxtyping import DTypeLike  # noqa: F401
+except ImportError:  # pragma: no cover - older jaxtyping
+    from typing import Any as DTypeLike  # type: ignore
 from jaxtyping import Float
 from jaxtyping import Int  # noqa: F401
 from jaxtyping import Key  # noqa: F401
@@ -20,6 +23,7 @@ from jaxtyping import UInt8  # noqa: F401
 from jaxtyping import config
 from jaxtyping import jaxtyped
 import jaxtyping._decorator
+import jaxtyping._array_types as _array_types
 try:
     import torch
 except Exception:  # pragma: no cover - torch 可选
@@ -36,6 +40,17 @@ def _check_dataclass_annotations(self, typechecker):
         return _original_check_dataclass_annotations(self, typechecker)
     return None
 jaxtyping._decorator._check_dataclass_annotations = _check_dataclass_annotations  # noqa: SLF001
+
+_original_make_array_cached = _array_types._make_array_cached  # noqa: SLF001
+
+
+def _safe_make_array_cached(array_type, *args, **kwargs):
+    if not isinstance(array_type, type):
+        return _original_make_array_cached(jax.Array, *args, **kwargs)
+    return _original_make_array_cached(array_type, *args, **kwargs)
+
+
+_array_types._make_array_cached = _safe_make_array_cached  # noqa: SLF001
 
 KeyArrayLike: TypeAlias = jax.typing.ArrayLike
 Params: TypeAlias = PyTree[Float[ArrayLike, "..."]]

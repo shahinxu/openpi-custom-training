@@ -6,6 +6,10 @@ import re
 from typing import Any, ParamSpec, TypeVar
 
 import flax.nnx as nnx
+import types
+
+if not hasattr(nnx, "filterlib"):
+    nnx.filterlib = types.SimpleNamespace(Filter=Any, PathParts=tuple)
 import jax
 
 P = ParamSpec("P")
@@ -53,11 +57,11 @@ class PathRegex:
         if not isinstance(self.pattern, re.Pattern):
             object.__setattr__(self, "pattern", re.compile(self.pattern))
 
-    def __call__(self, path: nnx.filterlib.PathParts, x: Any) -> bool:
+    def __call__(self, path, x: Any) -> bool:
         joined_path = self.sep.join(str(x) for x in path)
         assert isinstance(self.pattern, re.Pattern)
         return self.pattern.fullmatch(joined_path) is not None
-def state_map(state: nnx.State, filter: nnx.filterlib.Filter, fn: Callable[[Any], Any]) -> nnx.State:
+def state_map(state: nnx.State, filter, fn: Callable[[Any], Any]) -> nnx.State:
     """Apply a function to the leaves of the state that match the filter."""
     filtered_keys = set(state.filter(filter).flat_state())
     return state.map(lambda k, v: fn(v) if k in filtered_keys else v)
