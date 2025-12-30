@@ -13,12 +13,12 @@ _configure_env()
 import math
 import sys
 from pathlib import Path
-from typing import Iterable, Mapping, Any
+from typing import Iterable, Mapping, Any, TYPE_CHECKING
 import imageio.v2 as imageio
 import numpy as np
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = PACKAGE_ROOT.parents[1]
+PROJECT_ROOT = PACKAGE_ROOT.parent
 SRC_ROOT = PROJECT_ROOT / "src"
 for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:
@@ -48,6 +48,13 @@ except ImportError:
     except ImportError as err:  # pragma: no cover - runner 可选
         _VLA_IMPORT_ERROR = err
         VLACheckpointRunner = None  # type: ignore
+if TYPE_CHECKING:
+    try:
+        from .vla_runner import VLACheckpointRunner as VLACheckpointRunnerType
+    except ImportError:
+        from Interface_VLA_simulation_env.vla_runner import VLACheckpointRunner as VLACheckpointRunnerType
+else:
+    VLACheckpointRunnerType = Any
 CAMERA_EYE = [0.25, -0.05, 3.40]
 CAMERA_TARGET = [0.40, 0.05, 0.15]
 CAMERA_UP = [0.0, 1.0, 0.25]
@@ -202,7 +209,7 @@ def _replay_actions(env, actions: np.ndarray, action_repeat: int, frames: list[n
 
 def _run_policy_episode(
     env,
-    runner: VLACheckpointRunner,
+    runner: VLACheckpointRunnerType,
     instruction: str,
     action_repeat: int,
     frames: list[np.ndarray],

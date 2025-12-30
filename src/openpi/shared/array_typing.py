@@ -20,11 +20,14 @@ from jaxtyping import UInt8  # noqa: F401
 from jaxtyping import config
 from jaxtyping import jaxtyped
 import jaxtyping._decorator
-import torch
+try:
+    import torch
+except Exception:  # pragma: no cover - torch 可选
+    torch = None
 
 # patch jaxtyping to handle https://github.com/patrick-kidger/jaxtyping/issues/277.
 _original_check_dataclass_annotations = jaxtyping._decorator._check_dataclass_annotations  # noqa: SLF001
-Array = jax.Array | torch.Tensor
+Array = jax.Array
 def _check_dataclass_annotations(self, typechecker):
     if not any(
         frame.frame.f_globals.get("__name__") in {"jax._src.tree_util", "flax.nnx.transforms.compilation"}

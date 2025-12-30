@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = PACKAGE_ROOT.parents[1]
+PROJECT_ROOT = PACKAGE_ROOT.parent
 SRC_ROOT = PROJECT_ROOT / "src"
 for path in (PROJECT_ROOT, SRC_ROOT):
     if str(path) not in sys.path:

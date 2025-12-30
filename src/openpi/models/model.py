@@ -23,10 +23,8 @@ import openpi.shared.array_typing as at
 
 logger = logging.getLogger("openpi")
 
-# Type variable for array types (JAX arrays, PyTorch tensors, or numpy arrays)
 ArrayT = TypeVar("ArrayT", bound=jax.Array | torch.Tensor | np.ndarray)
 class ModelType(enum.Enum):
-    """Supported model types."""
 
     PI0 = "pi0"
     PI0_FAST = "pi0_fast"
@@ -37,10 +35,7 @@ IMAGE_KEYS = (
     "right_wrist_0_rgb",
 )
 IMAGE_RESOLUTION = (224, 224)
-#
-#
-#
-#
+
 @at.typecheck
 @struct.dataclass
 class Observation(Generic[ArrayT]):
