@@ -1,17 +1,13 @@
-"""Utilities for reading action sequences from Bridge-format parquet files."""
-
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
 
 def load_parquet_table(path: Path | str) -> pd.DataFrame:
-	"""Return the pandas table stored at *path* and ensure the file exists."""
-
 	parquet_path = Path(path)
 	if not parquet_path.exists():
 		raise FileNotFoundError(f"Parquet 文件不存在: {parquet_path}")
@@ -67,8 +63,6 @@ def load_and_remap_actions(
 	sim_indices: Sequence[int],
 	sim_action_dim: int | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-	"""Convenience wrapper that returns raw, subset, and remapped actions."""
-
 	df = load_parquet_table(path)
 	raw = extract_action_matrix(df)
 	subset = select_action_dims(raw, input_indices)

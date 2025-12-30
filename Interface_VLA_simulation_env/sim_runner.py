@@ -11,23 +11,46 @@ def _configure_env():
 _configure_env()
 
 import math
+import sys
 from pathlib import Path
-from typing import Iterable
-
+from typing import Iterable, Mapping, Any
 import imageio.v2 as imageio
 import numpy as np
+
+PACKAGE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_ROOT.parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+for path in (PROJECT_ROOT, SRC_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 import simpler_env
 from mani_skill2_real2sim.utils.sapien_utils import look_at
 
+_VLA_IMPORT_ERROR: Exception | None = None
+
 try:
-    from .config import ACTION_SEQUENCE, OUTPUT_VIDEO_PATH, TASK_NAME
+    from .config import ACTION_SEQUENCE, OUTPUT_VIDEO_PATH, TASK_NAME, USE_VLA_POLICY, VLA_POLICY
     from .parquet_loader import load_and_remap_actions
+    from .vla_runner import VLACheckpointRunner
 except ImportError:
-    from config import ACTION_SEQUENCE, OUTPUT_VIDEO_PATH, TASK_NAME
-    from parquet_loader import load_and_remap_actions
-CAMERA_EYE = [0.05, -0.20, 3.40]
-CAMERA_TARGET = [0.55, 0.15, 0.10]
+    from Interface_VLA_simulation_env.config import (
+        ACTION_SEQUENCE,
+        OUTPUT_VIDEO_PATH,
+        TASK_NAME,
+        USE_VLA_POLICY,
+        VLA_POLICY,
+    )
+    from Interface_VLA_simulation_env.parquet_loader import load_and_remap_actions
+
+    try:
+        from Interface_VLA_simulation_env.vla_runner import VLACheckpointRunner
+    except ImportError as err:  # pragma: no cover - runner 可选
+        _VLA_IMPORT_ERROR = err
+        VLACheckpointRunner = None  # type: ignore
+CAMERA_EYE = [0.25, -0.05, 3.40]
+CAMERA_TARGET = [0.40, 0.05, 0.15]
+CAMERA_UP = [0.0, 1.0, 0.25]
 CAMERA_FOV = 0.70
 ACTION_REPEAT = 6
 VIDEO_FPS = 15
@@ -37,10 +60,11 @@ DESIRED_WRIST_POSE = {
     "wrist_angle": -math.pi / 2,
     "wrist_rotate": 0.0,
 }
+MAX_POLICY_STEPS = 300
 
 
 def _build_render_config():
-    pose = look_at(CAMERA_EYE, CAMERA_TARGET)
+    pose = look_at(CAMERA_EYE, CAMERA_TARGET, up=CAMERA_UP)
     return {
         "render_camera": {
             "p": pose.p.tolist(),
@@ -120,19 +144,90 @@ def _load_mapped_actions(env, sequence_cfg):
     return mapped
 
 
+def _reset_env(env):
+    result = env.reset()
+    if isinstance(result, tuple):
+        return result[0]
+    return result
+
+
+def _robot_state(env) -> np.ndarray | None:
+    try:
+        robot = env.unwrapped.agent.robot
+        return np.asarray(robot.get_qpos(), dtype=np.float32)
+    except Exception:
+        return None
+
+
+def _clone_observation(obs: Any) -> Mapping[str, Any]:
+    if isinstance(obs, dict):
+        cloned = dict(obs)
+        if isinstance(obs.get("image"), dict):
+            cloned["image"] = dict(obs["image"])
+        return cloned
+    return {}
+
+
+def _policy_observation(obs: Any, env) -> Mapping[str, Any]:
+    cloned = _clone_observation(obs)
+    frame = _render_rgb(env)
+    image_block = cloned.get("image")
+    if not isinstance(image_block, dict):
+        image_block = {}
+    image_block["base_0_rgb"] = frame
+    cloned["image"] = image_block
+    return cloned
+
+
 def _replay_actions(env, actions: np.ndarray, action_repeat: int, frames: list[np.ndarray]):
-    obs, _ = env.reset()
+    env.reset()
     _align_wrist_pose(env, DESIRED_WRIST_POSE)
+    finished = False
     for step_idx, action in enumerate(actions):
+        if finished:
+            break
         for _ in range(action_repeat):
-            obs, reward, terminated, truncated, info = env.step(action)
+            _, _, terminated, truncated, _ = env.step(action)
             if CAPTURE_VIDEO:
                 frames.append(_render_rgb(env))
             if terminated or truncated:
-                obs, _ = env.reset()
-                _align_wrist_pose(env, DESIRED_WRIST_POSE)
+                print(
+                    f"[Info] Episode ended early at frame {step_idx + 1} (terminated={terminated}, truncated={truncated})"
+                )
+                finished = True
+                break
         if step_idx % 10 == 0:
             print(f"已执行 {step_idx + 1}/{actions.shape[0]} 帧")
+
+
+def _run_policy_episode(
+    env,
+    runner: VLACheckpointRunner,
+    instruction: str,
+    action_repeat: int,
+    frames: list[np.ndarray],
+    max_steps: int = MAX_POLICY_STEPS,
+):
+    obs = _reset_env(env)
+    _align_wrist_pose(env, DESIRED_WRIST_POSE)
+    finished = False
+    step_count = 0
+    while not finished and step_count < max_steps:
+        robot_state = _robot_state(env)
+        policy_obs = _policy_observation(obs, env)
+        action = runner.predict(policy_obs, instruction, robot_state=robot_state)
+        for _ in range(action_repeat):
+            obs, _, terminated, truncated, _ = env.step(action)
+            if CAPTURE_VIDEO:
+                frames.append(_render_rgb(env))
+            if terminated or truncated:
+                finished = True
+                break
+        step_count += 1
+        if step_count % 5 == 0:
+            print(f"[Info] 闭环推理已执行 {step_count} 步")
+    if not finished:
+        print(f"[Warn] 达到最大步数 {max_steps}，提前结束。")
 
 
 def run_action_sequence(
@@ -146,6 +241,17 @@ def run_action_sequence(
     env = _make_env(task_name)
     frames: list[np.ndarray] = []
     try:
+        if USE_VLA_POLICY and VLA_POLICY is not None:
+            if VLACheckpointRunner is None:
+                msg = "[Warn] 未找到 VLACheckpointRunner，回退到离线动作重放。"
+                if _VLA_IMPORT_ERROR is not None:
+                    msg += f" 原因: {_VLA_IMPORT_ERROR}"
+                print(msg)
+            else:
+                print("[Info] 使用 VLA checkpoint 执行闭环仿真")
+                runner = VLACheckpointRunner(VLA_POLICY)
+                _run_policy_episode(env, runner, VLA_POLICY.instruction, action_repeat, frames)
+                return output_video_path
         actions = _load_mapped_actions(env, action_cfg)
         print(f"[Info] 动作帧数: {actions.shape[0]}, 动作维度: {actions.shape[1]}")
         _replay_actions(env, actions, action_repeat, frames)
