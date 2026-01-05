@@ -41,7 +41,7 @@ class VLACheckpointConfig:
 	instruction: str
 	paligemma_variant: str = "gemma_2b_lora"
 	action_expert_variant: str = "gemma_300m_lora"
-	action_dim: int = 5
+	action_dim: int = 32
 	action_horizon: int = 10
 	max_token_len: int = 48
 	discrete_state_input: bool = False

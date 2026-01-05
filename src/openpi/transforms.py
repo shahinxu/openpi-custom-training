@@ -117,14 +117,22 @@ class Normalize(DataTransformFn):
         )
 
     def _normalize(self, x, stats: NormStats):
-        mean, std = stats.mean[..., : x.shape[-1]], stats.std[..., : x.shape[-1]]
-        return (x - mean) / (std + 1e-6)
+        target = x.shape[-1]
+        dim = min(stats.mean.shape[-1], target)
+        normalized = (x[..., :dim] - stats.mean[..., :dim]) / (stats.std[..., :dim] + 1e-6)
+        if dim == target:
+            return normalized
+        return np.concatenate([normalized, x[..., dim:]], axis=-1)
 
     def _normalize_quantile(self, x, stats: NormStats):
         assert stats.q01 is not None
         assert stats.q99 is not None
-        q01, q99 = stats.q01[..., : x.shape[-1]], stats.q99[..., : x.shape[-1]]
-        return (x - q01) / (q99 - q01 + 1e-6) * 2.0 - 1.0
+        target = x.shape[-1]
+        dim = min(stats.q01.shape[-1], target)
+        scaled = (x[..., :dim] - stats.q01[..., :dim]) / (stats.q99[..., :dim] - stats.q01[..., :dim] + 1e-6) * 2.0 - 1.0
+        if dim == target:
+            return scaled
+        return np.concatenate([scaled, x[..., dim:]], axis=-1)
 @dataclasses.dataclass(frozen=True)
 class Unnormalize(DataTransformFn):
     norm_stats: at.PyTree[NormStats] | None

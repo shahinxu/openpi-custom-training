@@ -5,7 +5,7 @@ def _configure_env():
     if "DISPLAY" in os.environ:
         del os.environ["DISPLAY"]
     os.environ["SVULKAN2_HEADLESS"] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "6"
     os.environ["SAP_DEVICE_ID"] = "0"
 
 _configure_env()
@@ -87,6 +87,20 @@ def _make_env(task_name: str):
         render_mode="rgb_array",
         render_camera_cfgs=_build_render_config(),
     )
+
+
+def _clip_action(action: np.ndarray, action_space) -> np.ndarray:
+    if not hasattr(action_space, "low") or not hasattr(action_space, "high"):
+        return action
+    low = np.asarray(action_space.low, dtype=np.float32)
+    high = np.asarray(action_space.high, dtype=np.float32)
+    if low.shape[0] != action.shape[0]:
+        dim = min(low.shape[0], action.shape[0])
+        clipped = np.clip(action[:dim], low[:dim], high[:dim])
+        if dim < action.shape[0]:
+            return np.concatenate([clipped, action[dim:]], axis=0)
+        return clipped
+    return np.clip(action, low, high)
 
 
 def _align_wrist_pose(env, joint_targets):
@@ -223,6 +237,11 @@ def _run_policy_episode(
         robot_state = _robot_state(env)
         policy_obs = _policy_observation(obs, env)
         action = runner.predict(policy_obs, instruction, robot_state=robot_state)
+        if not np.all(np.isfinite(action)):
+            raise ValueError(f"闭环策略输出了非法动作: {action}")
+        action = _clip_action(action, env.action_space)
+        if step_count < 3:
+            print(f"[Debug] 第 {step_count + 1} 步动作: {np.array2string(action, precision=4)}")
         for _ in range(action_repeat):
             obs, _, terminated, truncated, _ = env.step(action)
             if CAPTURE_VIDEO:
@@ -258,7 +277,6 @@ def run_action_sequence(
                 print("[Info] 使用 VLA checkpoint 执行闭环仿真")
                 runner = VLACheckpointRunner(VLA_POLICY)
                 _run_policy_episode(env, runner, VLA_POLICY.instruction, action_repeat, frames)
-                return output_video_path
         actions = _load_mapped_actions(env, action_cfg)
         print(f"[Info] 动作帧数: {actions.shape[0]}, 动作维度: {actions.shape[1]}")
         _replay_actions(env, actions, action_repeat, frames)
