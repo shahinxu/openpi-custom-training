@@ -463,33 +463,43 @@ class LeRobotCustomDataConfig(DataConfigFactory):
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         repack_transform = _transforms.Group(
             inputs=[
-                _transforms.RepackTransform({
-                    "observation/image": "observation.images.cam_0",
-                    "observation/wrist_image": "observation.images.cam_0",  # Reuse same camera
-                    "observation/state": "observation.state",
-                    "actions": "action",  # Map from our dataset's "action" to policy's "actions"
-                    "prompt": "task",
-                })
+                _transforms.RepackTransform(
+                    {
+                        "observation/image": "observation.images.cam_0",
+                        "observation/wrist_image": "observation.images.cam_0",
+                        "observation/state": "observation.state",
+                        "actions": "action",
+                        "prompt": "task",
+                    }
+                )
             ]
         )
-        
+
         data_transforms = _transforms.Group(
             inputs=[libero_policy.LiberoInputs(model_type=model_config.model_type)],
             outputs=[libero_policy.LiberoOutputs()],
         )
-        
+
         model_transforms = ModelTransformFactory()(model_config)
-        
+
+        base_config = self.create_base_config(assets_dirs, model_config)
+        norm_stats = base_config.norm_stats
+        if norm_stats is None and self.local_dir is not None:
+            try:
+                norm_stats = _normalize.load(self.local_dir)
+            except FileNotFoundError:
+                pass
+
         return dataclasses.replace(
-            self.create_base_config(assets_dirs, model_config),
+            base_config,
             action_sequence_keys=self.action_sequence_keys,  # Use our custom action key
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+            norm_stats=norm_stats,
         )
+
 _CONFIGS = [
-    #
-    #
     TrainConfig(
         name="pi0_aloha",
         model=pi0_config.Pi0Config(),

@@ -195,7 +195,10 @@ class Pi0(_model.BaseModel):
         )
         v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
-        return jnp.mean(jnp.square(v_t - u_t), axis=-1)
+        valid_indices = jnp.array([2, 3, 4], dtype=jnp.int32)
+        mask = jnp.zeros((self.action_dim,), dtype=v_t.dtype).at[valid_indices].set(1.0)
+        diff = (v_t - u_t) * mask  # mask 在最后一维广播
+        return jnp.mean(jnp.square(diff), axis=-1)
 
     @override
     def sample_actions(

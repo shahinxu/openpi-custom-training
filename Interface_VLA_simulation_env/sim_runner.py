@@ -267,6 +267,7 @@ def run_action_sequence(
     env = _make_env(task_name)
     frames: list[np.ndarray] = []
     try:
+        used_vla_policy = False
         if USE_VLA_POLICY and VLA_POLICY is not None:
             if VLACheckpointRunner is None:
                 msg = "[Warn] 未找到 VLACheckpointRunner，回退到离线动作重放。"
@@ -277,9 +278,11 @@ def run_action_sequence(
                 print("[Info] 使用 VLA checkpoint 执行闭环仿真")
                 runner = VLACheckpointRunner(VLA_POLICY)
                 _run_policy_episode(env, runner, VLA_POLICY.instruction, action_repeat, frames)
-        actions = _load_mapped_actions(env, action_cfg)
-        print(f"[Info] 动作帧数: {actions.shape[0]}, 动作维度: {actions.shape[1]}")
-        _replay_actions(env, actions, action_repeat, frames)
+                used_vla_policy = True
+        if not used_vla_policy:
+            actions = _load_mapped_actions(env, action_cfg)
+            print(f"[Info] 动作帧数: {actions.shape[0]}, 动作维度: {actions.shape[1]}")
+            _replay_actions(env, actions, action_repeat, frames)
     finally:
         env.close()
     if CAPTURE_VIDEO and frames:

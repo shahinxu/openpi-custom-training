@@ -11,6 +11,19 @@ import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
 
+# Work around a compatibility issue between the LeRobot datasets metadata and
+# the installed HuggingFace `datasets` version: some converted datasets use a
+# feature type named "List" which is no longer registered in
+# `datasets.features._FEATURE_TYPES`. We alias it to `Sequence` so that schema
+# parsing succeeds.
+try:  # pragma: no cover - environment specific shim
+    from datasets.features.features import _FEATURE_TYPES, Sequence as HFSequence
+
+    if "List" not in _FEATURE_TYPES:
+        _FEATURE_TYPES["List"] = HFSequence
+except Exception:  # pragma: no cover
+    pass
+
 import openpi.models.model as _model
 import openpi.training.config as _config
 from openpi.training.droid_rlds_dataset import DroidRldsDataset
