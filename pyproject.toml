@@ -12,8 +12,9 @@ dependencies = [
     "equinox>=0.11.8",
     "flatbuffers>=24.3.25",
     "flax==0.10.2",
-    # For local evaluation we don't need GCS support; plain fsspec is enough
-    "fsspec>=2024.6.0",
+    # Use fsspec with GCS support so we can download checkpoints from
+    # gs://openpi-assets via gcsfs.
+    "fsspec[gcs]>=2024.6.0",
     "gym-aloha>=0.1.1",
     "imageio>=2.36.1",
     "jax[cuda12]==0.5.3",

@@ -1,6 +1,7 @@
 import dataclasses
 import functools
 import logging
+import os
 import platform
 from typing import Any
 
@@ -28,7 +29,8 @@ import openpi.training.weight_loaders as _weight_loaders
 
 
 def init_logging():
-    logging.basicConfig(level=logging.WARNING, format='%(message)s')
+    # Use INFO so evaluation progress logs are visible while keeping output simple.
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
 def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = False, enabled: bool = True):
@@ -63,12 +65,13 @@ def evaluate_on_test_set(
     rng: at.KeyArrayLike,
     data_loader: _data_loader.DataLoader,
 ) -> dict[str, float]:
-    """Evaluate model on test set. Compute MSE for overall test set and per-episode."""
-    import json
     import csv
+    import json
     from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-    
+
     try:
+        os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BAR", "1")
+
         eval_dir = checkpoint_dir / "eval_results"
         eval_dir.mkdir(parents=True, exist_ok=True)
         info_path = epath.Path(config.data.local_dir) / "meta" / "info.json"
@@ -79,17 +82,20 @@ def evaluate_on_test_set(
         train_start, train_end = map(int, train_split.split(":"))
         total_episodes = info["total_episodes"]
         test_episode_indices = list(range(train_end, total_episodes))
-        
-        logging.info(f"Test episodes: {train_end}-{total_episodes-1} ({len(test_episode_indices)} episodes)")
-        
+
+        logging.warning(
+            f"[Eval] Starting evaluation at step {step}: "
+            f"test episodes {train_end}-{total_episodes-1} ({len(test_episode_indices)} episodes)"
+        )
+
         model = nnx.merge(train_state.model_def, train_state.params)
-        
+
         dataset = LeRobotDataset(
             repo_id=config.data.repo_id,
             root=config.data.local_dir,
         )
-        
-        logging.info("Grouping test data by episode...")
+
+        logging.info("[Eval] Grouping test data by episode...")
         episode_frames = {}
         for idx in range(len(dataset)):
             sample = dataset[idx]
@@ -99,8 +105,12 @@ def evaluate_on_test_set(
             if ep_idx not in episode_frames:
                 episode_frames[ep_idx] = []
             episode_frames[ep_idx].append(idx)
-        
-        logging.info(f"Found {len(episode_frames)} test episodes")
+
+        num_test_episodes = len(episode_frames)
+        num_test_frames = sum(len(v) for v in episode_frames.values())
+        logging.info(
+            f"[Eval] Found {num_test_episodes} test episodes with {num_test_frames} frames in test split"
+        )
         
         episode_data = {}
         for ep_idx in sorted(episode_frames.keys()):
@@ -109,24 +119,25 @@ def evaluate_on_test_set(
                 'mses': [],
                 'num_frames': len(episode_frames[ep_idx]),
             }
-        
-        logging.info("Creating transformed dataset for evaluation...")
+
+        logging.info("[Eval] Creating transformed dataset for evaluation...")
         from openpi.training.data_loader import transform_dataset, create_torch_dataset
-        
+
         torch_dataset = create_torch_dataset(
             config.data.create(config.assets_dirs, config.model),
             action_horizon=config.model.action_horizon,
             model_config=config.model
         )
-        
+
         transformed_dataset = transform_dataset(
             torch_dataset,
             config.data.create(config.assets_dirs, config.model),
             skip_norm_stats=False
         )
-        
+
         import torch
-        for ep_idx in sorted(episode_frames.keys()):
+        # Progress bar over episodes so eval progress is clearly visible.
+        for ep_idx in tqdm.tqdm(sorted(episode_frames.keys()), desc=f"Eval episodes (step {step})"):
             frame_indices = episode_frames[ep_idx]
             
             batch_size = 8
@@ -211,8 +222,8 @@ def evaluate_on_test_set(
         for ep_data in episode_data.values():
             all_mses.extend(ep_data['mses'])
         overall_mse = float(np.mean(all_mses)) if all_mses else 0.0
-        
-        logging.info(f"Evaluation complete: Overall MSE = {overall_mse:.6f}")
+
+        logging.warning(f"[Eval] Completed evaluation at step {step}: overall MSE = {overall_mse:.6f}")
         
         eval_summary = {
             "step": step,

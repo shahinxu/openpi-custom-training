@@ -1,0 +1,892 @@
+{
+  "0_001": {
+    "source_mesh": "0.001",
+    "visual": "visual/0_001.glb",
+    "collision": "collision/0_001.glb"
+  },
+  "1_001": {
+    "source_mesh": "1.001",
+    "visual": "visual/1_001.glb",
+    "collision": "collision/1_001.glb"
+  },
+  "10_001": {
+    "source_mesh": "10.001",
+    "visual": "visual/10_001.glb",
+    "collision": "collision/10_001.glb"
+  },
+  "11_001": {
+    "source_mesh": "11.001",
+    "visual": "visual/11_001.glb",
+    "collision": "collision/11_001.glb"
+  },
+  "2_001": {
+    "source_mesh": "2.001",
+    "visual": "visual/2_001.glb",
+    "collision": "collision/2_001.glb"
+  },
+  "3_001": {
+    "source_mesh": "3.001",
+    "visual": "visual/3_001.glb",
+    "collision": "collision/3_001.glb"
+  },
+  "4_001": {
+    "source_mesh": "4.001",
+    "visual": "visual/4_001.glb",
+    "collision": "collision/4_001.glb"
+  },
+  "5_001": {
+    "source_mesh": "5.001",
+    "visual": "visual/5_001.glb",
+    "collision": "collision/5_001.glb"
+  },
+  "6_001": {
+    "source_mesh": "6.001",
+    "visual": "visual/6_001.glb",
+    "collision": "collision/6_001.glb"
+  },
+  "7_001": {
+    "source_mesh": "7.001",
+    "visual": "visual/7_001.glb",
+    "collision": "collision/7_001.glb"
+  },
+  "8_001": {
+    "source_mesh": "8.001",
+    "visual": "visual/8_001.glb",
+    "collision": "collision/8_001.glb"
+  },
+  "9_001": {
+    "source_mesh": "9.001",
+    "visual": "visual/9_001.glb",
+    "collision": "collision/9_001.glb"
+  },
+  "cerchietto": {
+    "source_mesh": "Cerchietto",
+    "visual": "visual/cerchietto.glb",
+    "collision": "collision/cerchietto.glb"
+  },
+  "cerchietto_001": {
+    "source_mesh": "Cerchietto.001",
+    "visual": "visual/cerchietto_001.glb",
+    "collision": "collision/cerchietto_001.glb"
+  },
+  "cerchietto_002": {
+    "source_mesh": "Cerchietto.002",
+    "visual": "visual/cerchietto_002.glb",
+    "collision": "collision/cerchietto_002.glb"
+  },
+  "cerchietto_003": {
+    "source_mesh": "Cerchietto.003",
+    "visual": "visual/cerchietto_003.glb",
+    "collision": "collision/cerchietto_003.glb"
+  },
+  "cerchietto_004": {
+    "source_mesh": "Cerchietto.004",
+    "visual": "visual/cerchietto_004.glb",
+    "collision": "collision/cerchietto_004.glb"
+  },
+  "cerchietto_005": {
+    "source_mesh": "Cerchietto.005",
+    "visual": "visual/cerchietto_005.glb",
+    "collision": "collision/cerchietto_005.glb"
+  },
+  "cerchietto_006": {
+    "source_mesh": "Cerchietto.006",
+    "visual": "visual/cerchietto_006.glb",
+    "collision": "collision/cerchietto_006.glb"
+  },
+  "cerchietto_007": {
+    "source_mesh": "Cerchietto.007",
+    "visual": "visual/cerchietto_007.glb",
+    "collision": "collision/cerchietto_007.glb"
+  },
+  "cerchietto_008": {
+    "source_mesh": "Cerchietto.008",
+    "visual": "visual/cerchietto_008.glb",
+    "collision": "collision/cerchietto_008.glb"
+  },
+  "cerchietto_009": {
+    "source_mesh": "Cerchietto.009",
+    "visual": "visual/cerchietto_009.glb",
+    "collision": "collision/cerchietto_009.glb"
+  },
+  "cerchietto_010": {
+    "source_mesh": "Cerchietto.010",
+    "visual": "visual/cerchietto_010.glb",
+    "collision": "collision/cerchietto_010.glb"
+  },
+  "cerchietto_011": {
+    "source_mesh": "Cerchietto.011",
+    "visual": "visual/cerchietto_011.glb",
+    "collision": "collision/cerchietto_011.glb"
+  },
+  "cerchietto_012": {
+    "source_mesh": "Cerchietto.012",
+    "visual": "visual/cerchietto_012.glb",
+    "collision": "collision/cerchietto_012.glb"
+  },
+  "cerchietto_013": {
+    "source_mesh": "Cerchietto.013",
+    "visual": "visual/cerchietto_013.glb",
+    "collision": "collision/cerchietto_013.glb"
+  },
+  "cerchietto_014": {
+    "source_mesh": "Cerchietto.014",
+    "visual": "visual/cerchietto_014.glb",
+    "collision": "collision/cerchietto_014.glb"
+  },
+  "cerchietto_015": {
+    "source_mesh": "Cerchietto.015",
+    "visual": "visual/cerchietto_015.glb",
+    "collision": "collision/cerchietto_015.glb"
+  },
+  "cerchietto_016": {
+    "source_mesh": "Cerchietto.016",
+    "visual": "visual/cerchietto_016.glb",
+    "collision": "collision/cerchietto_016.glb"
+  },
+  "cerchietto_017": {
+    "source_mesh": "Cerchietto.017",
+    "visual": "visual/cerchietto_017.glb",
+    "collision": "collision/cerchietto_017.glb"
+  },
+  "cerchietto_018": {
+    "source_mesh": "Cerchietto.018",
+    "visual": "visual/cerchietto_018.glb",
+    "collision": "collision/cerchietto_018.glb"
+  },
+  "cerchietto_019": {
+    "source_mesh": "Cerchietto.019",
+    "visual": "visual/cerchietto_019.glb",
+    "collision": "collision/cerchietto_019.glb"
+  },
+  "cerchietto_020": {
+    "source_mesh": "Cerchietto.020",
+    "visual": "visual/cerchietto_020.glb",
+    "collision": "collision/cerchietto_020.glb"
+  },
+  "cerchietto_021": {
+    "source_mesh": "Cerchietto.021",
+    "visual": "visual/cerchietto_021.glb",
+    "collision": "collision/cerchietto_021.glb"
+  },
+  "cerchietto_022": {
+    "source_mesh": "Cerchietto.022",
+    "visual": "visual/cerchietto_022.glb",
+    "collision": "collision/cerchietto_022.glb"
+  },
+  "cerchietto_023": {
+    "source_mesh": "Cerchietto.023",
+    "visual": "visual/cerchietto_023.glb",
+    "collision": "collision/cerchietto_023.glb"
+  },
+  "cerchietto_024": {
+    "source_mesh": "Cerchietto.024",
+    "visual": "visual/cerchietto_024.glb",
+    "collision": "collision/cerchietto_024.glb"
+  },
+  "cerchietto_025": {
+    "source_mesh": "Cerchietto.025",
+    "visual": "visual/cerchietto_025.glb",
+    "collision": "collision/cerchietto_025.glb"
+  },
+  "cerchietto_026": {
+    "source_mesh": "Cerchietto.026",
+    "visual": "visual/cerchietto_026.glb",
+    "collision": "collision/cerchietto_026.glb"
+  },
+  "cerchietto_027": {
+    "source_mesh": "Cerchietto.027",
+    "visual": "visual/cerchietto_027.glb",
+    "collision": "collision/cerchietto_027.glb"
+  },
+  "cerchietto_028": {
+    "source_mesh": "Cerchietto.028",
+    "visual": "visual/cerchietto_028.glb",
+    "collision": "collision/cerchietto_028.glb"
+  },
+  "cerchietto_029": {
+    "source_mesh": "Cerchietto.029",
+    "visual": "visual/cerchietto_029.glb",
+    "collision": "collision/cerchietto_029.glb"
+  },
+  "cerchietto_030": {
+    "source_mesh": "Cerchietto.030",
+    "visual": "visual/cerchietto_030.glb",
+    "collision": "collision/cerchietto_030.glb"
+  },
+  "cerchietto_031": {
+    "source_mesh": "Cerchietto.031",
+    "visual": "visual/cerchietto_031.glb",
+    "collision": "collision/cerchietto_031.glb"
+  },
+  "cerchietto_032": {
+    "source_mesh": "Cerchietto.032",
+    "visual": "visual/cerchietto_032.glb",
+    "collision": "collision/cerchietto_032.glb"
+  },
+  "cerchietto_033": {
+    "source_mesh": "Cerchietto.033",
+    "visual": "visual/cerchietto_033.glb",
+    "collision": "collision/cerchietto_033.glb"
+  },
+  "cerchietto_034": {
+    "source_mesh": "Cerchietto.034",
+    "visual": "visual/cerchietto_034.glb",
+    "collision": "collision/cerchietto_034.glb"
+  },
+  "cerchietto_035": {
+    "source_mesh": "Cerchietto.035",
+    "visual": "visual/cerchietto_035.glb",
+    "collision": "collision/cerchietto_035.glb"
+  },
+  "cerchietto_036": {
+    "source_mesh": "Cerchietto.036",
+    "visual": "visual/cerchietto_036.glb",
+    "collision": "collision/cerchietto_036.glb"
+  },
+  "cerchietto_037": {
+    "source_mesh": "Cerchietto.037",
+    "visual": "visual/cerchietto_037.glb",
+    "collision": "collision/cerchietto_037.glb"
+  },
+  "cerchietto_038": {
+    "source_mesh": "Cerchietto.038",
+    "visual": "visual/cerchietto_038.glb",
+    "collision": "collision/cerchietto_038.glb"
+  },
+  "cerchietto_039": {
+    "source_mesh": "Cerchietto.039",
+    "visual": "visual/cerchietto_039.glb",
+    "collision": "collision/cerchietto_039.glb"
+  },
+  "cerchietto_041": {
+    "source_mesh": "Cerchietto.041",
+    "visual": "visual/cerchietto_041.glb",
+    "collision": "collision/cerchietto_041.glb"
+  },
+  "cerchietto_042": {
+    "source_mesh": "Cerchietto.042",
+    "visual": "visual/cerchietto_042.glb",
+    "collision": "collision/cerchietto_042.glb"
+  },
+  "cerchietto_043": {
+    "source_mesh": "Cerchietto.043",
+    "visual": "visual/cerchietto_043.glb",
+    "collision": "collision/cerchietto_043.glb"
+  },
+  "cerchietto_044": {
+    "source_mesh": "Cerchietto.044",
+    "visual": "visual/cerchietto_044.glb",
+    "collision": "collision/cerchietto_044.glb"
+  },
+  "cerchietto_045": {
+    "source_mesh": "Cerchietto.045",
+    "visual": "visual/cerchietto_045.glb",
+    "collision": "collision/cerchietto_045.glb"
+  },
+  "cerchietto_046": {
+    "source_mesh": "Cerchietto.046",
+    "visual": "visual/cerchietto_046.glb",
+    "collision": "collision/cerchietto_046.glb"
+  },
+  "cerchietto_047": {
+    "source_mesh": "Cerchietto.047",
+    "visual": "visual/cerchietto_047.glb",
+    "collision": "collision/cerchietto_047.glb"
+  },
+  "cerchietto_048": {
+    "source_mesh": "Cerchietto.048",
+    "visual": "visual/cerchietto_048.glb",
+    "collision": "collision/cerchietto_048.glb"
+  },
+  "cerchietto_049": {
+    "source_mesh": "Cerchietto.049",
+    "visual": "visual/cerchietto_049.glb",
+    "collision": "collision/cerchietto_049.glb"
+  },
+  "cerchietto_050": {
+    "source_mesh": "Cerchietto.050",
+    "visual": "visual/cerchietto_050.glb",
+    "collision": "collision/cerchietto_050.glb"
+  },
+  "cerchietto_051": {
+    "source_mesh": "Cerchietto.051",
+    "visual": "visual/cerchietto_051.glb",
+    "collision": "collision/cerchietto_051.glb"
+  },
+  "cerchietto_052": {
+    "source_mesh": "Cerchietto.052",
+    "visual": "visual/cerchietto_052.glb",
+    "collision": "collision/cerchietto_052.glb"
+  },
+  "cerchietto_053": {
+    "source_mesh": "Cerchietto.053",
+    "visual": "visual/cerchietto_053.glb",
+    "collision": "collision/cerchietto_053.glb"
+  },
+  "cerchietto_054": {
+    "source_mesh": "Cerchietto.054",
+    "visual": "visual/cerchietto_054.glb",
+    "collision": "collision/cerchietto_054.glb"
+  },
+  "cerchietto_055": {
+    "source_mesh": "Cerchietto.055",
+    "visual": "visual/cerchietto_055.glb",
+    "collision": "collision/cerchietto_055.glb"
+  },
+  "cerchietto_056": {
+    "source_mesh": "Cerchietto.056",
+    "visual": "visual/cerchietto_056.glb",
+    "collision": "collision/cerchietto_056.glb"
+  },
+  "cerchietto_057": {
+    "source_mesh": "Cerchietto.057",
+    "visual": "visual/cerchietto_057.glb",
+    "collision": "collision/cerchietto_057.glb"
+  },
+  "cerchietto_058": {
+    "source_mesh": "Cerchietto.058",
+    "visual": "visual/cerchietto_058.glb",
+    "collision": "collision/cerchietto_058.glb"
+  },
+  "cerchietto_059": {
+    "source_mesh": "Cerchietto.059",
+    "visual": "visual/cerchietto_059.glb",
+    "collision": "collision/cerchietto_059.glb"
+  },
+  "cerchietto_060": {
+    "source_mesh": "Cerchietto.060",
+    "visual": "visual/cerchietto_060.glb",
+    "collision": "collision/cerchietto_060.glb"
+  },
+  "cerchietto_061": {
+    "source_mesh": "Cerchietto.061",
+    "visual": "visual/cerchietto_061.glb",
+    "collision": "collision/cerchietto_061.glb"
+  },
+  "cerchietto_062": {
+    "source_mesh": "Cerchietto.062",
+    "visual": "visual/cerchietto_062.glb",
+    "collision": "collision/cerchietto_062.glb"
+  },
+  "cerchietto_063": {
+    "source_mesh": "Cerchietto.063",
+    "visual": "visual/cerchietto_063.glb",
+    "collision": "collision/cerchietto_063.glb"
+  },
+  "cerchietto_064": {
+    "source_mesh": "Cerchietto.064",
+    "visual": "visual/cerchietto_064.glb",
+    "collision": "collision/cerchietto_064.glb"
+  },
+  "cerchietto_065": {
+    "source_mesh": "Cerchietto.065",
+    "visual": "visual/cerchietto_065.glb",
+    "collision": "collision/cerchietto_065.glb"
+  },
+  "cerchietto_066": {
+    "source_mesh": "Cerchietto.066",
+    "visual": "visual/cerchietto_066.glb",
+    "collision": "collision/cerchietto_066.glb"
+  },
+  "cerchietto_067": {
+    "source_mesh": "Cerchietto.067",
+    "visual": "visual/cerchietto_067.glb",
+    "collision": "collision/cerchietto_067.glb"
+  },
+  "cerchietto_068": {
+    "source_mesh": "Cerchietto.068",
+    "visual": "visual/cerchietto_068.glb",
+    "collision": "collision/cerchietto_068.glb"
+  },
+  "cerchietto_069": {
+    "source_mesh": "Cerchietto.069",
+    "visual": "visual/cerchietto_069.glb",
+    "collision": "collision/cerchietto_069.glb"
+  },
+  "cerchietto_070": {
+    "source_mesh": "Cerchietto.070",
+    "visual": "visual/cerchietto_070.glb",
+    "collision": "collision/cerchietto_070.glb"
+  },
+  "cerchietto_071": {
+    "source_mesh": "Cerchietto.071",
+    "visual": "visual/cerchietto_071.glb",
+    "collision": "collision/cerchietto_071.glb"
+  },
+  "cerchietto_072": {
+    "source_mesh": "Cerchietto.072",
+    "visual": "visual/cerchietto_072.glb",
+    "collision": "collision/cerchietto_072.glb"
+  },
+  "cerchietto_073": {
+    "source_mesh": "Cerchietto.073",
+    "visual": "visual/cerchietto_073.glb",
+    "collision": "collision/cerchietto_073.glb"
+  },
+  "cerchietto_074": {
+    "source_mesh": "Cerchietto.074",
+    "visual": "visual/cerchietto_074.glb",
+    "collision": "collision/cerchietto_074.glb"
+  },
+  "cerchietto_075": {
+    "source_mesh": "Cerchietto.075",
+    "visual": "visual/cerchietto_075.glb",
+    "collision": "collision/cerchietto_075.glb"
+  },
+  "cerchietto_076": {
+    "source_mesh": "Cerchietto.076",
+    "visual": "visual/cerchietto_076.glb",
+    "collision": "collision/cerchietto_076.glb"
+  },
+  "cerchietto_077": {
+    "source_mesh": "Cerchietto.077",
+    "visual": "visual/cerchietto_077.glb",
+    "collision": "collision/cerchietto_077.glb"
+  },
+  "cerchietto_078": {
+    "source_mesh": "Cerchietto.078",
+    "visual": "visual/cerchietto_078.glb",
+    "collision": "collision/cerchietto_078.glb"
+  },
+  "cerchietto_079": {
+    "source_mesh": "Cerchietto.079",
+    "visual": "visual/cerchietto_079.glb",
+    "collision": "collision/cerchietto_079.glb"
+  },
+  "cerchietto_080": {
+    "source_mesh": "Cerchietto.080",
+    "visual": "visual/cerchietto_080.glb",
+    "collision": "collision/cerchietto_080.glb"
+  },
+  "cerchietto_081": {
+    "source_mesh": "Cerchietto.081",
+    "visual": "visual/cerchietto_081.glb",
+    "collision": "collision/cerchietto_081.glb"
+  },
+  "cerchietto_082": {
+    "source_mesh": "Cerchietto.082",
+    "visual": "visual/cerchietto_082.glb",
+    "collision": "collision/cerchietto_082.glb"
+  },
+  "cerchietto_083": {
+    "source_mesh": "Cerchietto.083",
+    "visual": "visual/cerchietto_083.glb",
+    "collision": "collision/cerchietto_083.glb"
+  },
+  "cerchietto_084": {
+    "source_mesh": "Cerchietto.084",
+    "visual": "visual/cerchietto_084.glb",
+    "collision": "collision/cerchietto_084.glb"
+  },
+  "cerchietto_085": {
+    "source_mesh": "Cerchietto.085",
+    "visual": "visual/cerchietto_085.glb",
+    "collision": "collision/cerchietto_085.glb"
+  },
+  "cerchietto_086": {
+    "source_mesh": "Cerchietto.086",
+    "visual": "visual/cerchietto_086.glb",
+    "collision": "collision/cerchietto_086.glb"
+  },
+  "cerchietto_087": {
+    "source_mesh": "Cerchietto.087",
+    "visual": "visual/cerchietto_087.glb",
+    "collision": "collision/cerchietto_087.glb"
+  },
+  "cerchietto_088": {
+    "source_mesh": "Cerchietto.088",
+    "visual": "visual/cerchietto_088.glb",
+    "collision": "collision/cerchietto_088.glb"
+  },
+  "cerchietto_089": {
+    "source_mesh": "Cerchietto.089",
+    "visual": "visual/cerchietto_089.glb",
+    "collision": "collision/cerchietto_089.glb"
+  },
+  "cerchietto_090": {
+    "source_mesh": "Cerchietto.090",
+    "visual": "visual/cerchietto_090.glb",
+    "collision": "collision/cerchietto_090.glb"
+  },
+  "cerchietto_091": {
+    "source_mesh": "Cerchietto.091",
+    "visual": "visual/cerchietto_091.glb",
+    "collision": "collision/cerchietto_091.glb"
+  },
+  "cerchietto_092": {
+    "source_mesh": "Cerchietto.092",
+    "visual": "visual/cerchietto_092.glb",
+    "collision": "collision/cerchietto_092.glb"
+  },
+  "cerchietto_093": {
+    "source_mesh": "Cerchietto.093",
+    "visual": "visual/cerchietto_093.glb",
+    "collision": "collision/cerchietto_093.glb"
+  },
+  "cerchietto_094": {
+    "source_mesh": "Cerchietto.094",
+    "visual": "visual/cerchietto_094.glb",
+    "collision": "collision/cerchietto_094.glb"
+  },
+  "cerchietto_095": {
+    "source_mesh": "Cerchietto.095",
+    "visual": "visual/cerchietto_095.glb",
+    "collision": "collision/cerchietto_095.glb"
+  },
+  "cerchietto_096": {
+    "source_mesh": "Cerchietto.096",
+    "visual": "visual/cerchietto_096.glb",
+    "collision": "collision/cerchietto_096.glb"
+  },
+  "cerchietto_097": {
+    "source_mesh": "Cerchietto.097",
+    "visual": "visual/cerchietto_097.glb",
+    "collision": "collision/cerchietto_097.glb"
+  },
+  "cerchietto_098": {
+    "source_mesh": "Cerchietto.098",
+    "visual": "visual/cerchietto_098.glb",
+    "collision": "collision/cerchietto_098.glb"
+  },
+  "cerchietto_099": {
+    "source_mesh": "Cerchietto.099",
+    "visual": "visual/cerchietto_099.glb",
+    "collision": "collision/cerchietto_099.glb"
+  },
+  "cerchietto_100": {
+    "source_mesh": "Cerchietto.100",
+    "visual": "visual/cerchietto_100.glb",
+    "collision": "collision/cerchietto_100.glb"
+  },
+  "cerchietto_101": {
+    "source_mesh": "Cerchietto.101",
+    "visual": "visual/cerchietto_101.glb",
+    "collision": "collision/cerchietto_101.glb"
+  },
+  "cerchietto_102": {
+    "source_mesh": "Cerchietto.102",
+    "visual": "visual/cerchietto_102.glb",
+    "collision": "collision/cerchietto_102.glb"
+  },
+  "cerchietto_103": {
+    "source_mesh": "Cerchietto.103",
+    "visual": "visual/cerchietto_103.glb",
+    "collision": "collision/cerchietto_103.glb"
+  },
+  "cerchietto_104": {
+    "source_mesh": "Cerchietto.104",
+    "visual": "visual/cerchietto_104.glb",
+    "collision": "collision/cerchietto_104.glb"
+  },
+  "cerchietto_105": {
+    "source_mesh": "Cerchietto.105",
+    "visual": "visual/cerchietto_105.glb",
+    "collision": "collision/cerchietto_105.glb"
+  },
+  "cerchietto_106": {
+    "source_mesh": "Cerchietto.106",
+    "visual": "visual/cerchietto_106.glb",
+    "collision": "collision/cerchietto_106.glb"
+  },
+  "cerchietto_107": {
+    "source_mesh": "Cerchietto.107",
+    "visual": "visual/cerchietto_107.glb",
+    "collision": "collision/cerchietto_107.glb"
+  },
+  "cerchietto_108": {
+    "source_mesh": "Cerchietto.108",
+    "visual": "visual/cerchietto_108.glb",
+    "collision": "collision/cerchietto_108.glb"
+  },
+  "cerchietto_109": {
+    "source_mesh": "Cerchietto.109",
+    "visual": "visual/cerchietto_109.glb",
+    "collision": "collision/cerchietto_109.glb"
+  },
+  "cerchietto_110": {
+    "source_mesh": "Cerchietto.110",
+    "visual": "visual/cerchietto_110.glb",
+    "collision": "collision/cerchietto_110.glb"
+  },
+  "cover_test3": {
+    "source_mesh": "Cover Test3",
+    "visual": "visual/cover_test3.glb",
+    "collision": "collision/cover_test3.glb"
+  },
+  "gomito_cover_bicept": {
+    "source_mesh": "Gomito Cover Bicept",
+    "visual": "visual/gomito_cover_bicept.glb",
+    "collision": "collision/gomito_cover_bicept.glb"
+  },
+  "gomito_cover_forearm": {
+    "source_mesh": "Gomito Cover Forearm",
+    "visual": "visual/gomito_cover_forearm.glb",
+    "collision": "collision/gomito_cover_forearm.glb"
+  },
+  "gomito_cover_forearm_black_001": {
+    "source_mesh": "Gomito Cover Forearm Black.001",
+    "visual": "visual/gomito_cover_forearm_black_001.glb",
+    "collision": "collision/gomito_cover_forearm_black_001.glb"
+  },
+  "paf1003801": {
+    "source_mesh": "Paf1003801",
+    "visual": "visual/paf1003801.glb",
+    "collision": "collision/paf1003801.glb"
+  },
+  "paf1003901": {
+    "source_mesh": "Paf1003901",
+    "visual": "visual/paf1003901.glb",
+    "collision": "collision/paf1003901.glb"
+  },
+  "paf1004001": {
+    "source_mesh": "Paf1004001",
+    "visual": "visual/paf1004001.glb",
+    "collision": "collision/paf1004001.glb"
+  },
+  "paf1004101": {
+    "source_mesh": "Paf1004101",
+    "visual": "visual/paf1004101.glb",
+    "collision": "collision/paf1004101.glb"
+  },
+  "paf1004201": {
+    "source_mesh": "Paf1004201",
+    "visual": "visual/paf1004201.glb",
+    "collision": "collision/paf1004201.glb"
+  },
+  "paf1004201_001": {
+    "source_mesh": "Paf1004201.001",
+    "visual": "visual/paf1004201_001.glb",
+    "collision": "collision/paf1004201_001.glb"
+  },
+  "paf1004301": {
+    "source_mesh": "Paf1004301",
+    "visual": "visual/paf1004301.glb",
+    "collision": "collision/paf1004301.glb"
+  },
+  "paf1004401": {
+    "source_mesh": "Paf1004401",
+    "visual": "visual/paf1004401.glb",
+    "collision": "collision/paf1004401.glb"
+  },
+  "plug_001": {
+    "source_mesh": "Plug.001",
+    "visual": "visual/plug_001.glb",
+    "collision": "collision/plug_001.glb"
+  },
+  "skin_dorso_001": {
+    "source_mesh": "Skin Dorso.001",
+    "visual": "visual/skin_dorso_001.glb",
+    "collision": "collision/skin_dorso_001.glb"
+  },
+  "skin_palmo": {
+    "source_mesh": "Skin Palmo",
+    "visual": "visual/skin_palmo.glb",
+    "collision": "collision/skin_palmo.glb"
+  },
+  "sme1000300": {
+    "source_mesh": "Sme1000300",
+    "visual": "visual/sme1000300.glb",
+    "collision": "collision/sme1000300.glb"
+  },
+  "sme1000400": {
+    "source_mesh": "Sme1000400",
+    "visual": "visual/sme1000400.glb",
+    "collision": "collision/sme1000400.glb"
+  },
+  "sme1000500": {
+    "source_mesh": "Sme1000500",
+    "visual": "visual/sme1000500.glb",
+    "collision": "collision/sme1000500.glb"
+  },
+  "sme1000600": {
+    "source_mesh": "Sme1000600",
+    "visual": "visual/sme1000600.glb",
+    "collision": "collision/sme1000600.glb"
+  },
+  "soffietto_lowdensity_000": {
+    "source_mesh": "Soffietto Lowdensity.000",
+    "visual": "visual/soffietto_lowdensity_000.glb",
+    "collision": "collision/soffietto_lowdensity_000.glb"
+  },
+  "tip_000": {
+    "source_mesh": "Tip.000",
+    "visual": "visual/tip_000.glb",
+    "collision": "collision/tip_000.glb"
+  },
+  "tip_001": {
+    "source_mesh": "Tip.001",
+    "visual": "visual/tip_001.glb",
+    "collision": "collision/tip_001.glb"
+  },
+  "tip_002": {
+    "source_mesh": "Tip.002",
+    "visual": "visual/tip_002.glb",
+    "collision": "collision/tip_002.glb"
+  },
+  "tip_003": {
+    "source_mesh": "Tip.003",
+    "visual": "visual/tip_003.glb",
+    "collision": "collision/tip_003.glb"
+  },
+  "tip_004": {
+    "source_mesh": "Tip.004",
+    "visual": "visual/tip_004.glb",
+    "collision": "collision/tip_004.glb"
+  },
+  "tip_005": {
+    "source_mesh": "Tip.005",
+    "visual": "visual/tip_005.glb",
+    "collision": "collision/tip_005.glb"
+  },
+  "tip_006": {
+    "source_mesh": "Tip.006",
+    "visual": "visual/tip_006.glb",
+    "collision": "collision/tip_006.glb"
+  },
+  "tip_007": {
+    "source_mesh": "Tip.007",
+    "visual": "visual/tip_007.glb",
+    "collision": "collision/tip_007.glb"
+  },
+  "tip_008": {
+    "source_mesh": "Tip.008",
+    "visual": "visual/tip_008.glb",
+    "collision": "collision/tip_008.glb"
+  },
+  "tip_009": {
+    "source_mesh": "Tip.009",
+    "visual": "visual/tip_009.glb",
+    "collision": "collision/tip_009.glb"
+  },
+  "tip_010": {
+    "source_mesh": "Tip.010",
+    "visual": "visual/tip_010.glb",
+    "collision": "collision/tip_010.glb"
+  },
+  "tip_011": {
+    "source_mesh": "Tip.011",
+    "visual": "visual/tip_011.glb",
+    "collision": "collision/tip_011.glb"
+  },
+  "tip_012": {
+    "source_mesh": "Tip.012",
+    "visual": "visual/tip_012.glb",
+    "collision": "collision/tip_012.glb"
+  },
+  "tip_013": {
+    "source_mesh": "Tip.013",
+    "visual": "visual/tip_013.glb",
+    "collision": "collision/tip_013.glb"
+  },
+  "tip_014": {
+    "source_mesh": "Tip.014",
+    "visual": "visual/tip_014.glb",
+    "collision": "collision/tip_014.glb"
+  },
+  "tip_015": {
+    "source_mesh": "Tip.015",
+    "visual": "visual/tip_015.glb",
+    "collision": "collision/tip_015.glb"
+  },
+  "tip_016": {
+    "source_mesh": "Tip.016",
+    "visual": "visual/tip_016.glb",
+    "collision": "collision/tip_016.glb"
+  },
+  "tip_017": {
+    "source_mesh": "Tip.017",
+    "visual": "visual/tip_017.glb",
+    "collision": "collision/tip_017.glb"
+  },
+  "tip_018": {
+    "source_mesh": "Tip.018",
+    "visual": "visual/tip_018.glb",
+    "collision": "collision/tip_018.glb"
+  },
+  "tip_019": {
+    "source_mesh": "Tip.019",
+    "visual": "visual/tip_019.glb",
+    "collision": "collision/tip_019.glb"
+  },
+  "tip_020": {
+    "source_mesh": "Tip.020",
+    "visual": "visual/tip_020.glb",
+    "collision": "collision/tip_020.glb"
+  },
+  "tip_021": {
+    "source_mesh": "Tip.021",
+    "visual": "visual/tip_021.glb",
+    "collision": "collision/tip_021.glb"
+  },
+  "tip_022": {
+    "source_mesh": "Tip.022",
+    "visual": "visual/tip_022.glb",
+    "collision": "collision/tip_022.glb"
+  },
+  "tip_023": {
+    "source_mesh": "Tip.023",
+    "visual": "visual/tip_023.glb",
+    "collision": "collision/tip_023.glb"
+  },
+  "tip_024": {
+    "source_mesh": "Tip.024",
+    "visual": "visual/tip_024.glb",
+    "collision": "collision/tip_024.glb"
+  },
+  "tip_025": {
+    "source_mesh": "Tip.025",
+    "visual": "visual/tip_025.glb",
+    "collision": "collision/tip_025.glb"
+  },
+  "tip_026": {
+    "source_mesh": "Tip.026",
+    "visual": "visual/tip_026.glb",
+    "collision": "collision/tip_026.glb"
+  },
+  "tip_027": {
+    "source_mesh": "Tip.027",
+    "visual": "visual/tip_027.glb",
+    "collision": "collision/tip_027.glb"
+  },
+  "tip_028": {
+    "source_mesh": "Tip.028",
+    "visual": "visual/tip_028.glb",
+    "collision": "collision/tip_028.glb"
+  },
+  "tip_029": {
+    "source_mesh": "Tip.029",
+    "visual": "visual/tip_029.glb",
+    "collision": "collision/tip_029.glb"
+  },
+  "tip_030": {
+    "source_mesh": "Tip.030",
+    "visual": "visual/tip_030.glb",
+    "collision": "collision/tip_030.glb"
+  },
+  "tip_031": {
+    "source_mesh": "Tip.031",
+    "visual": "visual/tip_031.glb",
+    "collision": "collision/tip_031.glb"
+  },
+  "tip_032": {
+    "source_mesh": "Tip.032",
+    "visual": "visual/tip_032.glb",
+    "collision": "collision/tip_032.glb"
+  },
+  "tip_033": {
+    "source_mesh": "Tip.033",
+    "visual": "visual/tip_033.glb",
+    "collision": "collision/tip_033.glb"
+  },
+  "tip_034": {
+    "source_mesh": "Tip.034",
+    "visual": "visual/tip_034.glb",
+    "collision": "collision/tip_034.glb"
+  },
+  "tip_035": {
+    "source_mesh": "Tip.035",
+    "visual": "visual/tip_035.glb",
+    "collision": "collision/tip_035.glb"
+  }
+}
