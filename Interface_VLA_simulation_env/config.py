@@ -50,8 +50,8 @@ class VLACheckpointConfig:
 	use_quantile_stats: bool = True
 	action_mapping: ActionMappingConfig = field(
 		default_factory=lambda: ActionMappingConfig(
-			policy_indices=(2, 3, 4),
-			sim_indices=(4, 5, 6),
+			policy_indices=(0, 1, 2, 3, 4, 5, 6),
+			sim_indices=(0, 1, 2, 3, 4, 5, 6),
 			sim_action_dim=7,
 		)
 	)

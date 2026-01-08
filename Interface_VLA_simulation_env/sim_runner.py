@@ -1,38 +1,19 @@
 from __future__ import annotations
 
 import os
-def _configure_env():
-    if "DISPLAY" in os.environ:
-        del os.environ["DISPLAY"]
-    os.environ["SVULKAN2_HEADLESS"] = "1"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "6"
-    os.environ["SAP_DEVICE_ID"] = "0"
-
-_configure_env()
-
-import math
-import sys
 from pathlib import Path
-from typing import Iterable, Mapping, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 import imageio.v2 as imageio
 import numpy as np
+import pandas as pd
 
-PACKAGE_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = PACKAGE_ROOT.parent
-SRC_ROOT = PROJECT_ROOT / "src"
-for path in (PROJECT_ROOT, SRC_ROOT):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
-
-import simpler_env
-from mani_skill2_real2sim.utils.sapien_utils import look_at
+import robosuite as suite
 
 _VLA_IMPORT_ERROR: Exception | None = None
 
 try:
     from .config import ACTION_SEQUENCE, OUTPUT_VIDEO_PATH, TASK_NAME, USE_VLA_POLICY, VLA_POLICY
-    from .parquet_loader import load_and_remap_actions
-    from .vla_runner import VLACheckpointRunner
 except ImportError:
     from Interface_VLA_simulation_env.config import (
         ACTION_SEQUENCE,
@@ -41,182 +22,158 @@ except ImportError:
         USE_VLA_POLICY,
         VLA_POLICY,
     )
-    from Interface_VLA_simulation_env.parquet_loader import load_and_remap_actions
 
+try:
+    from .vla_runner import VLACheckpointRunner
+except ImportError:
     try:
         from Interface_VLA_simulation_env.vla_runner import VLACheckpointRunner
-    except ImportError as err:  # pragma: no cover - runner 可选
+    except ImportError as err:
         _VLA_IMPORT_ERROR = err
         VLACheckpointRunner = None  # type: ignore
+
 if TYPE_CHECKING:
-    try:
-        from .vla_runner import VLACheckpointRunner as VLACheckpointRunnerType
-    except ImportError:
-        from Interface_VLA_simulation_env.vla_runner import VLACheckpointRunner as VLACheckpointRunnerType
+    from .vla_runner import VLACheckpointRunner as VLACheckpointRunnerType
 else:
     VLACheckpointRunnerType = Any
-CAMERA_EYE = [0.25, -0.05, 3.40]
-CAMERA_TARGET = [0.40, 0.05, 0.15]
-CAMERA_UP = [0.0, 1.0, 0.25]
-CAMERA_FOV = 0.70
-ACTION_REPEAT = 6
-VIDEO_FPS = 15
-CAPTURE_VIDEO = True
-DESIRED_WRIST_POSE = {
-    "forearm_roll": 0.0,
-    "wrist_angle": -math.pi / 2,
-    "wrist_rotate": 0.0,
+
+ROBOSUITE_TASK_MAP = {
+    "google_robot_pick_coke_can": {
+        "env_name": "Lift",
+        "robots": "Hannes",
+    },
 }
-MAX_POLICY_STEPS = 300
+
+DEFAULT_CAMERA_NAME = "birdview"
+DEFAULT_CAMERA_WIDTH = 256
+DEFAULT_CAMERA_HEIGHT = 256
+DEFAULT_CONTROL_FREQ = 20
 
 
-def _build_render_config():
-    pose = look_at(CAMERA_EYE, CAMERA_TARGET, up=CAMERA_UP)
-    return {
-        "render_camera": {
-            "p": pose.p.tolist(),
-            "q": pose.q.tolist(),
-            "fov": CAMERA_FOV,
-        }
-    }
-
-
-def _make_env(task_name: str):
-    return simpler_env.make(
-        task_name,
-        render_mode="rgb_array",
-        render_camera_cfgs=_build_render_config(),
+def _make_robosuite_env(task_name: str, use_camera: bool = True):
+    config = ROBOSUITE_TASK_MAP.get(task_name)
+    if config is None:
+        raise ValueError(f"未找到任务 {task_name} 的配置，请在 ROBOSUITE_TASK_MAP 中添加")
+    
+    env = suite.make(
+        env_name=config["env_name"],
+        robots=config["robots"],
+        has_renderer=False,
+        has_offscreen_renderer=use_camera,
+        use_camera_obs=False,
+        camera_names=DEFAULT_CAMERA_NAME if use_camera else None,
+        camera_heights=DEFAULT_CAMERA_HEIGHT if use_camera else None,
+        camera_widths=DEFAULT_CAMERA_WIDTH if use_camera else None,
+        control_freq=DEFAULT_CONTROL_FREQ,
     )
+    
+    if config["robots"] == "Hannes":
+        base_body_id = env.sim.model.body_name2id('robot0_base')
+        env.sim.model.body_pos[base_body_id][0] = 0.0
+        env.sim.model.body_quat[base_body_id] = [0, 0, 0, 1]
+        cam_id = env.sim.model.camera_name2id(DEFAULT_CAMERA_NAME)
+        env.sim.model.cam_pos[cam_id] = [-1.0, 0.0, 1.35]
+        env.sim.model.cam_quat[cam_id] = [0.43, 0.56, -0.56, 0.43]
+    
+    return env
 
 
-def _clip_action(action: np.ndarray, action_space) -> np.ndarray:
-    if not hasattr(action_space, "low") or not hasattr(action_space, "high"):
-        return action
-    low = np.asarray(action_space.low, dtype=np.float32)
-    high = np.asarray(action_space.high, dtype=np.float32)
-    if low.shape[0] != action.shape[0]:
-        dim = min(low.shape[0], action.shape[0])
-        clipped = np.clip(action[:dim], low[:dim], high[:dim])
-        if dim < action.shape[0]:
-            return np.concatenate([clipped, action[dim:]], axis=0)
-        return clipped
-    return np.clip(action, low, high)
+def _render_frame(env) -> np.ndarray:
+    cam_id = env.sim.model.camera_name2id("frontview")
+    env.sim.model.cam_pos[cam_id][:] = [0.0, 1.0, 1.5]
+    env.sim.model.cam_quat[cam_id][:] = [0.924, -0.383, 0, 0]
+    env.sim.forward()
+    
+    frame = env.sim.render(
+        camera_name="frontview",
+        width=DEFAULT_CAMERA_WIDTH,
+        height=DEFAULT_CAMERA_HEIGHT,
+        depth=False,
+    )
+    frame = np.asarray(frame)
+    if frame.ndim == 3:
+        return np.flipud(frame)
+    
+    raise RuntimeError("无法从环境渲染图像")
 
 
-def _align_wrist_pose(env, joint_targets):
-    if not joint_targets:
-        return
-    controller = env.unwrapped.agent.controller
-    arm_ctrl = controller.controllers.get("arm")
-    if arm_ctrl is None:
-        return
-    if hasattr(arm_ctrl, "joint_names"):
-        names = arm_ctrl.joint_names
-    else:
-        names = [joint.name for joint in getattr(arm_ctrl, "joints", [])]
-    name_to_idx = {name: idx for name, idx in zip(names, arm_ctrl.joint_indices)}
-    robot = env.unwrapped.agent.robot
-    qpos = robot.get_qpos()
-    changed = False
-    for joint_name, target in joint_targets.items():
-        joint_idx = name_to_idx.get(joint_name)
-        if joint_idx is None:
-            continue
-        qpos[joint_idx] = target
-        changed = True
-    if changed:
-        robot.set_qpos(qpos)
-
-
-def _render_rgb(env):
-    frame = env.render()
-    if isinstance(frame, list):
-        frame = frame[0]
-    return frame
-
-
-def _save_video(frames: Iterable[np.ndarray], output_path: Path, fps: int):
+def _save_video(frames: list[np.ndarray], output_path: Path, fps: int):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    imageio.mimsave(output_path, list(frames), fps=fps)
+    if frames:
+        imageio.mimsave(output_path, frames, fps=fps)
+    else:
+        print("[Warn] 未捕获到任何帧，不会生成视频。")
 
-
-def _load_mapped_actions(env, sequence_cfg):
-    sim_dim = env.action_space.shape[0]
+def _load_mapped_actions(env, sequence_cfg) -> np.ndarray:
+    parquet_path = Path(sequence_cfg.parquet_path)
+    if not parquet_path.exists():
+        raise FileNotFoundError(f"Parquet 文件不存在: {parquet_path}")
+    
+    df = pd.read_parquet(parquet_path)
+    if "action" not in df.columns:
+        cols = ", ".join(df.columns)
+        raise KeyError(f"缺少 action 列，现有列: {cols}")
+    action_series = df["action"].to_numpy()
+    if len(action_series) == 0:
+        raise ValueError("动作数据为空")
+    raw_actions = np.stack(action_series).astype(np.float32)
+    low, high = env.action_spec
+    sim_dim = len(low)
+    
     requested_dim = sequence_cfg.sim_action_dim or sim_dim
     target_dim = max(sim_dim, requested_dim)
-    _, _, mapped = load_and_remap_actions(
-        sequence_cfg.parquet_path,
-        sequence_cfg.input_dof_dim,
-        sequence_cfg.sim_dof_dim,
-        sim_action_dim=target_dim,
-    )
+    
+    input_indices = sequence_cfg.input_dof_dim
+    sim_indices = sequence_cfg.sim_dof_dim
+    
+    if len(input_indices) != len(sim_indices):
+        raise ValueError("input_dof_dim 与 sim_dof_dim 长度不一致")
+    
+    if target_dim <= max(sim_indices, default=-1):
+        raise ValueError("sim_action_dim 过小，无法容纳对应索引")
+    
+    mapped = np.zeros((raw_actions.shape[0], target_dim), dtype=np.float32)
+    if input_indices:
+        mapped[:, sim_indices] = raw_actions[:, input_indices]
+    
     start = max(sequence_cfg.frame_start, 0)
     end = sequence_cfg.frame_end
     mapped = mapped[start:end]
+    
     if mapped.shape[0] == 0:
         raise ValueError("未从动作序列中截取到有效帧")
     if target_dim > sim_dim:
         mapped = mapped[:, :sim_dim]
     elif target_dim < sim_dim:
-        padded = np.zeros((mapped.shape[0], sim_dim), dtype=mapped.dtype)
+        padded = np.zeros((mapped.shape[0], sim_dim), dtype=np.float32)
         padded[:, :target_dim] = mapped
         mapped = padded
+    
     return mapped
-
-
-def _reset_env(env):
-    result = env.reset()
-    if isinstance(result, tuple):
-        return result[0]
-    return result
-
-
-def _robot_state(env) -> np.ndarray | None:
-    try:
-        robot = env.unwrapped.agent.robot
-        return np.asarray(robot.get_qpos(), dtype=np.float32)
-    except Exception:
-        return None
-
-
-def _clone_observation(obs: Any) -> Mapping[str, Any]:
-    if isinstance(obs, dict):
-        cloned = dict(obs)
-        if isinstance(obs.get("image"), dict):
-            cloned["image"] = dict(obs["image"])
-        return cloned
-    return {}
-
-
-def _policy_observation(obs: Any, env) -> Mapping[str, Any]:
-    cloned = _clone_observation(obs)
-    frame = _render_rgb(env)
-    image_block = cloned.get("image")
-    if not isinstance(image_block, dict):
-        image_block = {}
-    image_block["base_0_rgb"] = frame
-    cloned["image"] = image_block
-    return cloned
 
 
 def _replay_actions(env, actions: np.ndarray, action_repeat: int, frames: list[np.ndarray]):
     env.reset()
-    _align_wrist_pose(env, DESIRED_WRIST_POSE)
+    frames.append(_render_frame(env))
+    
+    low, high = env.action_spec
     finished = False
+    
     for step_idx, action in enumerate(actions):
         if finished:
             break
+        
+        clipped_action = np.clip(action, low, high)
+        
         for _ in range(action_repeat):
-            _, _, terminated, truncated, _ = env.step(action)
-            if CAPTURE_VIDEO:
-                frames.append(_render_rgb(env))
-            if terminated or truncated:
-                print(
-                    f"[Info] Episode ended early at frame {step_idx + 1} (terminated={terminated}, truncated={truncated})"
-                )
+            obs, reward, done, info = env.step(clipped_action)
+            frames.append(_render_frame(env))
+            if done:
+                print(f"[Info] Episode ended early at frame {step_idx + 1}")
                 finished = True
                 break
+        
         if step_idx % 10 == 0:
             print(f"已执行 {step_idx + 1}/{actions.shape[0]} 帧")
 
@@ -227,31 +184,52 @@ def _run_policy_episode(
     instruction: str,
     action_repeat: int,
     frames: list[np.ndarray],
-    max_steps: int = MAX_POLICY_STEPS,
+    max_steps: int = 20,
 ):
-    obs = _reset_env(env)
-    _align_wrist_pose(env, DESIRED_WRIST_POSE)
+    """使用 VLA 策略在 robosuite 环境中运行闭环控制"""
+    env.reset()
+    frames.append(_render_frame(env))
+    
+    low, high = env.action_spec
     finished = False
     step_count = 0
+    
     while not finished and step_count < max_steps:
-        robot_state = _robot_state(env)
-        policy_obs = _policy_observation(obs, env)
-        action = runner.predict(policy_obs, instruction, robot_state=robot_state)
-        if not np.all(np.isfinite(action)):
-            raise ValueError(f"闭环策略输出了非法动作: {action}")
-        action = _clip_action(action, env.action_space)
+        frame = _render_frame(env)
+        policy_obs = {
+            "state": np.zeros(0, dtype=np.float32),
+            "image": {"base_0_rgb": frame},
+        }
+        
+        vla_action = runner.predict(policy_obs, instruction)
+        if not np.all(np.isfinite(vla_action)):
+            raise ValueError(f"策略输出了非法动作: {vla_action}")
+        
+        action = np.array([
+            vla_action[2],
+            vla_action[3],
+            vla_action[4],
+            vla_action[4],
+            vla_action[4],
+            vla_action[4],
+        ])
+        
+        clipped_action = np.clip(action, low, high)
+        
         if step_count < 3:
-            print(f"[Debug] 第 {step_count + 1} 步动作: {np.array2string(action, precision=4)}")
+            print(f"[Debug] 第 {step_count + 1} 步动作: {np.array2string(clipped_action, precision=4)}")
+        
         for _ in range(action_repeat):
-            obs, _, terminated, truncated, _ = env.step(action)
-            if CAPTURE_VIDEO:
-                frames.append(_render_rgb(env))
-            if terminated or truncated:
+            obs, reward, done, info = env.step(clipped_action)
+            frames.append(_render_frame(env))
+            if done:
                 finished = True
                 break
+        
         step_count += 1
         if step_count % 5 == 0:
             print(f"[Info] 闭环推理已执行 {step_count} 步")
+    
     if not finished:
         print(f"[Warn] 达到最大步数 {max_steps}，提前结束。")
 
@@ -260,12 +238,19 @@ def run_action_sequence(
     task_name: str = TASK_NAME,
     action_cfg=ACTION_SEQUENCE,
     output_video_path: Path = OUTPUT_VIDEO_PATH,
-    action_repeat: int = ACTION_REPEAT,
-    video_fps: int = VIDEO_FPS,
+    action_repeat: int = 6,
+    video_fps: int = 15,
+    gpu_id: int | None = None,
+    max_steps: int = 20,
 ):
-    print(f"[Info] 创建环境: {task_name}")
-    env = _make_env(task_name)
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+        print(f"[Info] 使用 GPU {gpu_id} 进行 VLA 推理")
+    
+    print(f"[Info] 创建 robosuite 环境: {task_name}")
+    env = _make_robosuite_env(task_name, use_camera=True)
     frames: list[np.ndarray] = []
+    
     try:
         used_vla_policy = False
         if USE_VLA_POLICY and VLA_POLICY is not None:
@@ -277,19 +262,22 @@ def run_action_sequence(
             else:
                 print("[Info] 使用 VLA checkpoint 执行闭环仿真")
                 runner = VLACheckpointRunner(VLA_POLICY)
-                _run_policy_episode(env, runner, VLA_POLICY.instruction, action_repeat, frames)
+                _run_policy_episode(env, runner, VLA_POLICY.instruction, action_repeat, frames, max_steps=max_steps)
                 used_vla_policy = True
+        
         if not used_vla_policy:
             actions = _load_mapped_actions(env, action_cfg)
             print(f"[Info] 动作帧数: {actions.shape[0]}, 动作维度: {actions.shape[1]}")
             _replay_actions(env, actions, action_repeat, frames)
     finally:
         env.close()
-    if CAPTURE_VIDEO and frames:
+    
+    if frames:
         _save_video(frames, output_video_path, video_fps)
         print(f"[Info] 视频已保存到 {output_video_path}")
-    elif CAPTURE_VIDEO:
+    else:
         print("[Warn] 未捕获到帧，视频未生成。")
+    
     return output_video_path
 
 

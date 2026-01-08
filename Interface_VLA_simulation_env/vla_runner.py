@@ -33,18 +33,21 @@ class _ObservationBundle:
 
 
 class VLACheckpointRunner:
-    """封装 Pi0.5 checkpoint 推理，负责处理观测、指令以及动作映射。"""
-
     _IMAGE_KEYS = model_lib.IMAGE_KEYS
     _IMAGE_SHAPE = model_lib.IMAGE_RESOLUTION
     _STATE_CANDIDATE_KEYS = ("state", "proprio", "agent_state", "robot_state", "qpos", "eef_pose")
     _IMAGE_CANDIDATE_KEYS = ("image", "images", "rgb", "camera", "cam")
 
     def __init__(self, cfg: VLACheckpointConfig):
+        print(f"[VLA] 初始化 VLACheckpointRunner...")
+        print(f"[VLA] Checkpoint: {cfg.checkpoint_dir}")
+        print(f"[VLA] Norm stats: {cfg.norm_stats_dir}")
         self._cfg = cfg
         self._rng = jax.random.key(cfg.rng_seed)
+        print(f"[VLA] 创建 tokenizer...")
         self._tokenizer = tokenizer_lib.PaligemmaTokenizer(max_len=cfg.max_token_len)
         self._model = self._load_model(cfg)
+        print(f"[VLA] 加载归一化统计信息...")
         self._state_norm, self._action_norm = self._load_norm_stats(cfg)
         self._state_normalizer = (
             Normalize({"state": self._state_norm}, use_quantiles=cfg.use_quantile_stats) if self._state_norm else None
@@ -52,6 +55,7 @@ class VLACheckpointRunner:
         self._action_denorm = (
             Unnormalize({"action": self._action_norm}, use_quantiles=cfg.use_quantile_stats) if self._action_norm else None
         )
+        print(f"[VLA] VLACheckpointRunner 初始化完成")
 
     def predict(
         self,
@@ -60,7 +64,6 @@ class VLACheckpointRunner:
         *,
         robot_state: np.ndarray | None = None,
     ) -> np.ndarray:
-        """使用 checkpoint 计算单步动作。"""
 
         prompt = instruction or self._cfg.instruction
         obs_bundle = self._prepare_model_inputs(observation, robot_state)
@@ -77,11 +80,10 @@ class VLACheckpointRunner:
         return self._map_to_simulator(action_np)
 
     def reset(self):
-        """重置内部随机种子（可选）。"""
-
         self._rng = jax.random.key(self._cfg.rng_seed)
 
     def _load_model(self, cfg: VLACheckpointConfig) -> model_lib.BaseModel:
+        print(f"[VLA] 创建模型配置: {cfg.paligemma_variant} + {cfg.action_expert_variant}")
         model_cfg = pi0_config.Pi0Config(
             pi05=True,
             paligemma_variant=cfg.paligemma_variant,
@@ -94,8 +96,12 @@ class VLACheckpointRunner:
         params_path = cfg.checkpoint_dir / "params"
         if not params_path.exists():
             params_path = cfg.checkpoint_dir / "train_state"
+        print(f"[VLA] 从 {params_path} 加载参数（可能需要几分钟，请耐心等待）...")
         params = model_lib.restore_params(params_path)
-        return model_cfg.load(params)
+        print(f"[VLA] 参数加载完成，初始化模型...")
+        model = model_cfg.load(params)
+        print(f"[VLA] 模型初始化完成")
+        return model
 
     def _load_norm_stats(
         self, cfg: VLACheckpointConfig
@@ -174,6 +180,18 @@ class VLACheckpointRunner:
             if src >= action.shape[0] or dst >= mapping.sim_action_dim:
                 continue
             result[dst] = action[src]
+        
+        nonzero_mask = result != 0
+        if np.any(nonzero_mask):
+            nonzero_values = result[nonzero_mask]
+            action_min = nonzero_values.min()
+            action_max = nonzero_values.max()
+            action_range = action_max - action_min
+            
+            if action_range > 1e-6:  # 避免除零
+                # 线性缩放到 [-1, 1]
+                result[nonzero_mask] = 2.0 * (nonzero_values - action_min) / action_range - 1.0
+        
         return result
 
     def _extract_images(self, observation: Mapping[str, Any] | None) -> dict[str, np.ndarray]:

@@ -36,6 +36,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sim-action-dim", type=int, default=None, help="Full simulator action dimension")
     parser.add_argument("--action-repeat", type=int, default=None, help="Number of sim steps per dataset frame")
     parser.add_argument("--video-fps", type=int, default=None, help="FPS for exported video")
+    parser.add_argument("--gpu", type=int, default=None, help="GPU device ID for VLA inference (0-7)")
+    parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps for VLA closed-loop inference")
     return parser
 
 
@@ -64,6 +66,10 @@ def main(argv: Sequence[str] | None = None):
         extra_kwargs["action_repeat"] = args.action_repeat
     if args.video_fps is not None:
         extra_kwargs["video_fps"] = args.video_fps
+    if args.gpu is not None:
+        extra_kwargs["gpu_id"] = args.gpu
+    if args.max_steps is not None:
+        extra_kwargs["max_steps"] = args.max_steps
 
     run_action_sequence(
         task_name=task_name,

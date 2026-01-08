@@ -1,0 +1,101 @@
+<?xml version="1.0" ?>
+<mujoco model="hannes">
+  <compiler angle="radian"/>
+  
+  <option>
+    <flag contact="enable"/>
+  </option>
+  
+  <equality>
+    <!-- 所有手指关节耦合到食指关节 -->
+    <joint joint1="forefinger_joint" joint2="midfinger_joint" polycoef="0 1 0 0 0"/>
+    <joint joint1="forefinger_joint" joint2="ringfinger_joint" polycoef="0 1 0 0 0"/>
+    <joint joint1="forefinger_joint" joint2="littlefinger_joint" polycoef="0 1 0 0 0"/>
+  </equality>
+  
+  <asset>
+    <material name="skin" rgba="0.96 0.83 0.74 1"/>
+    <material name="red" rgba="1 0 0 1"/>
+  </asset>
+  
+  <actuator>
+    <motor name="wrist_pitch_motor" joint="wrist_pitch" ctrllimited="true" ctrlrange="-5.0 5.0"/>
+    <motor name="wrist_yaw_motor" joint="wrist_yaw" ctrllimited="true" ctrlrange="-5.0 5.0"/>
+    <!-- 4个手指的 actuator（虽然通过 equality 约束同步，但 robosuite 需要完整的 actuator 定义） -->
+    <motor name="forefinger_motor" joint="forefinger_joint" ctrllimited="true" ctrlrange="0.0 2.0"/>
+    <motor name="midfinger_motor" joint="midfinger_joint" ctrllimited="true" ctrlrange="0.0 2.0"/>
+    <motor name="ringfinger_motor" joint="ringfinger_joint" ctrllimited="true" ctrlrange="0.0 2.0"/>
+    <motor name="littlefinger_motor" joint="littlefinger_joint" ctrllimited="true" ctrlrange="0.0 2.0"/>
+  </actuator>
+  
+  <worldbody>
+    <!-- Hannes 手部（只包含机器人本体） -->
+    <body name="base" pos="0 0 0">
+      <site name="right_center" pos="0 0 0" size="0.01" rgba="1 0.3 0.3 1" group="2"/>
+      <inertial pos="0 0 0" mass="0.1" diaginertia="0.01 0.01 0.01"/>
+      <geom type="box" size="0.03 0.03 0.02" rgba="0.5 0.5 0.5 1" contype="0" conaffinity="0"/>
+      
+      <!-- Wrist pitch -->
+      <body name="wrist_pitch_link" pos="0 0 0.02">
+        <inertial pos="0 0 0" mass="0.05" diaginertia="0.0005 0.0005 0.0005"/>
+        <joint name="wrist_pitch" type="hinge" pos="0 0 0" axis="1 0 0" 
+               limited="true" range="-0.5236 0.5236" damping="0.1"/>
+        
+        <!-- Wrist yaw -->
+        <body name="wrist_yaw_link" pos="0 0 0">
+          <inertial pos="0 0 0" mass="0.05" diaginertia="0.0005 0.0005 0.0005"/>
+          <joint name="wrist_yaw" type="hinge" pos="0 0 0" axis="0 1 0" 
+                 limited="true" range="-1.0472 1.0472" damping="0.1"/>
+          
+          <!-- Palm -->
+          <body name="palm" pos="0 0 0">
+            <inertial pos="0 -0.003 0.001" mass="0.2" diaginertia="0.002 0.002 0.001"/>
+            <geom type="box" size="0.02 0.04 0.005" material="skin" contype="1" conaffinity="2"/>
+            
+            <!-- Forefinger -->
+            <body name="forefinger_link" pos="0.001 -0.005 0.001">
+              <inertial pos="0 -0.0015 0" mass="0.02" diaginertia="0.0001 0.0001 0.0001"/>
+              <joint name="forefinger_joint" type="hinge" pos="0 0 0" axis="1 0 0" 
+                     limited="true" range="0.0 1.57" damping="0.05"/>
+              <geom type="capsule" size="0.004 0.015" material="skin" 
+                    contype="1" conaffinity="2" pos="0 -0.015 0" quat="0.707 0 0.707 0"/>
+            </body>
+            
+            <!-- Midfinger -->
+            <body name="midfinger_link" pos="0 -0.006 0.001">
+              <inertial pos="0 -0.0016 0" mass="0.025" diaginertia="0.00015 0.00015 0.00005"/>
+              <joint name="midfinger_joint" type="hinge" pos="0 0 0" axis="1 0 0" 
+                     limited="true" range="0.0 1.57" damping="0.05"/>
+              <geom type="capsule" size="0.004 0.016" material="skin" 
+                    contype="1" conaffinity="2" pos="0 -0.016 0" quat="0.707 0 0.707 0"/>
+            </body>
+            
+            <!-- Ringfinger -->
+            <body name="ringfinger_link" pos="-0.001 -0.005 0.001">
+              <inertial pos="0 -0.0015 0" mass="0.022" diaginertia="0.00012 0.00012 0.00005"/>
+              <joint name="ringfinger_joint" type="hinge" pos="0 0 0" axis="1 0 0" 
+                     limited="true" range="0.0 1.57" damping="0.05"/>
+              <geom type="capsule" size="0.004 0.015" material="skin" 
+                    contype="1" conaffinity="2" pos="0 -0.015 0" quat="0.707 0 0.707 0"/>
+            </body>
+            
+            <!-- Littlefinger -->
+            <body name="littlefinger_link" pos="-0.002 -0.005 0.001">
+              <inertial pos="0 -0.00125 0" mass="0.018" diaginertia="0.0001 0.0001 0.00004"/>
+              <joint name="littlefinger_joint" type="hinge" pos="0 0 0" axis="1 0 0" 
+                     limited="true" range="0.0 1.57" damping="0.05"/>
+              <geom type="capsule" size="0.003 0.0125" material="skin" 
+                    contype="1" conaffinity="2" pos="0 -0.0125 0" quat="0.707 0 0.707 0"/>
+            </body>
+            
+            <!-- Right hand site for robosuite -->
+            <body name="right_hand" pos="0 -0.04 0" quat="1 0 0 0">
+              <inertial pos="0 0 0" mass="0.001" diaginertia="0.0001 0.0001 0.0001"/>
+            </body>
+            
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
