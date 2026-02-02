@@ -69,10 +69,10 @@ def _make_robosuite_env(task_name: str, use_camera: bool = True):
     
     if config["robots"] == "Hannes":
         base_body_id = env.sim.model.body_name2id('robot0_base')
-        env.sim.model.body_pos[base_body_id][0] = 0.0
+        env.sim.model.body_pos[base_body_id] = [-0.6, 0.0, 0.0]
         env.sim.model.body_quat[base_body_id] = [0, 0, 0, 1]
         cam_id = env.sim.model.camera_name2id(DEFAULT_CAMERA_NAME)
-        env.sim.model.cam_pos[cam_id] = [-1.0, 0.0, 1.35]
+        env.sim.model.cam_pos[cam_id] = [1.0, 0.0, 1.35]
         env.sim.model.cam_quat[cam_id] = [0.43, 0.56, -0.56, 0.43]
     
     return env
@@ -80,8 +80,8 @@ def _make_robosuite_env(task_name: str, use_camera: bool = True):
 
 def _render_frame(env) -> np.ndarray:
     cam_id = env.sim.model.camera_name2id("frontview")
-    env.sim.model.cam_pos[cam_id][:] = [0.0, 1.0, 1.5]
-    env.sim.model.cam_quat[cam_id][:] = [0.924, -0.383, 0, 0]
+    env.sim.model.cam_pos[cam_id][:] = [0.1, 0.0, 1.5]
+    env.sim.model.cam_quat[cam_id][:] = [0.653, 0.271, 0.271, 0.653]
     env.sim.forward()
     
     frame = env.sim.render(
