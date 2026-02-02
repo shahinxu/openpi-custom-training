@@ -176,3 +176,6 @@ datasets/*/videos/
 # Keep metadata
 !datasets/**/meta/
 !datasets/**/split_info.json
+*.hdf5
+hannes_demonstrations_robomimic/
+wandb/

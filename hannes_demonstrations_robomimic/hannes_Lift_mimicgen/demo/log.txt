@@ -65,5 +65,112 @@ MuJoCo comes with its own version of GLFW, so it's preferable to use that one.
 
 The easy solution is to `import mujoco_py` _before_ `import glfw`.
 
-Compiling /home/rzh/conda-environment/openpi_mujoco/lib/python3.10/site-packages/mujoco_py/cymj.pyx because it changed.
-[1/1] Cythonizing /home/rzh/conda-environment/openpi_mujoco/lib/python3.10/site-packages/mujoco_py/cymj.pyx
+
+============= Initialized Observation Utils with Obs Spec =============
+
+using obs modality: low_dim with keys: []
+using obs modality: rgb with keys: []
+[33mROBOMIMIC WARNING(
+    No environment version found in dataset!
+    Cannot verify if dataset and installed environment versions match
+)[0m
+
+==== Using environment with the following metadata ====
+{
+    "env_name": "Lift",
+    "env_version": "1.5.2",
+    "type": 1,
+    "env_kwargs": {
+        "robots": "Hannes",
+        "control_freq": 20,
+        "horizon": 1000,
+        "use_object_obs": true,
+        "controller_configs": {
+            "type": "BASIC",
+            "body_parts": {
+                "right": {
+                    "type": "OSC_POSE",
+                    "input_max": 1,
+                    "input_min": -1,
+                    "output_max": [
+                        0.05,
+                        0.05,
+                        0.05,
+                        0.5,
+                        0.5,
+                        0.5
+                    ],
+                    "output_min": [
+                        -0.05,
+                        -0.05,
+                        -0.05,
+                        -0.5,
+                        -0.5,
+                        -0.5
+                    ],
+                    "kp": 150,
+                    "damping_ratio": 1,
+                    "impedance_mode": "fixed",
+                    "kp_limits": [
+                        0,
+                        300
+                    ],
+                    "damping_ratio_limits": [
+                        0,
+                        10
+                    ],
+                    "position_limits": null,
+                    "orientation_limits": null,
+                    "uncouple_pos_ori": true,
+                    "input_type": "delta",
+                    "input_ref_frame": "base",
+                    "interpolation": null,
+                    "ramp_ratio": 0.2,
+                    "gripper": {
+                        "type": "GRIP"
+                    }
+                }
+            }
+        },
+        "reward_shaping": false,
+        "has_renderer": false,
+        "has_offscreen_renderer": false,
+        "ignore_done": true,
+        "use_camera_obs": false,
+        "camera_depths": false
+    }
+}
+
+Detected Hannes robot - wrapping environment to strip gripper action dimension
+Created environment interface: MG_HannesLift
+
+DataGenerator: loading dataset at path hannes_demonstrations_robomimic/hannes_Lift_source_20260126_234824.hdf5...
+  0%|          | 0/5 [00:00<?, ?it/s]100%|##########| 5/5 [00:00<00:00, 817.48it/s]
+
+DataGenerator: done loading
+
+
+==== Created Data Generator ====
+DataGenerator (
+	dataset_path=hannes_demonstrations_robomimic/hannes_Lift_source_20260126_234824.hdf5
+	demo_keys=['demo_0', 'demo_1', 'demo_2', 'demo_3', 'demo_4']
+)
+
+run failed with error:
+'EnvRobosuite' object has no attribute 'sim'
+
+Traceback (most recent call last):
+  File "/playpen-shared/zhenx/openpi/mimicgen/mimicgen/scripts/generate_dataset.py", line 585, in main
+    important_stats = generate_dataset(
+  File "/playpen-shared/zhenx/openpi/mimicgen/mimicgen/scripts/generate_dataset.py", line 335, in generate_dataset
+    generated_traj = data_generator.generate(
+  File "/playpen-shared/zhenx/openpi/mimicgen/mimicgen/datagen/data_generator.py", line 267, in generate
+    cur_datagen_info = env_interface.get_datagen_info()
+  File "/playpen-shared/zhenx/openpi/mimicgen/mimicgen/env_interfaces/base.py", line 190, in get_datagen_info
+    object_poses = self.get_object_poses()
+  File "/playpen-shared/zhenx/openpi/mimicgen/mimicgen/env_interfaces/robosuite.py", line 408, in get_object_poses
+    cube=self.get_object_pose(obj_name=base_env.cube.root_body, obj_type="body"),
+  File "/playpen-shared/zhenx/openpi/mimicgen/mimicgen/env_interfaces/robosuite.py", line 168, in get_object_pose
+    obj_id = self.env.sim.model.body_name2id(obj_name)
+AttributeError: 'EnvRobosuite' object has no attribute 'sim'
+
